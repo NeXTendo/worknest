@@ -38,8 +38,8 @@ export default function ResetPasswordPage() {
 
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
+        const { error: profileError } = await (supabase
+          .from('profiles') as any)
           .update({ must_change_password: false })
           .eq('id', user.id)
 
