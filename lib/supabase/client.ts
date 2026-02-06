@@ -1,6 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr'
 import { SupabaseClient } from '@supabase/supabase-js'
-import { Database } from '@/lib/database.types'
+import { Database } from '@/types/database.types'
 
 // Logger utility for browser
 const logger = {
@@ -33,17 +33,6 @@ let browserClientInstance: SupabaseClient<Database> | null = null
  * @returns SupabaseClient<Database>
  * @throws Error if environment variables are missing
  */
-async function handleLogout() {
-  const res = await fetch('/api/logout', { method: 'POST' })
-  const data = await res.json()
-
-  if (data.success) {
-    // Redirect to login
-    window.location.href = '/auth/login'
-  } else {
-    console.error('Logout failed', data.error)
-  }
-}
 
 export function createClient(): SupabaseClient<Database> {
   // Return existing instance if available (singleton pattern)

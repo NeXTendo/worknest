@@ -28,15 +28,15 @@ export function AppHeader() {
 
   const handleLogout = async () => {
   try {
-    // Call server logout route
     const res = await fetch('/api/logout', { method: 'POST' })
     const data = await res.json()
 
     if (data.success) {
-      // Reset your browser client singleton
+      // Reset browser singleton
       import('@/lib/supabase/client').then(mod => mod.resetBrowserClient())
 
       // Clear auth store
+      await supabase.auth.signOut()
       logout()
 
       // Redirect to login page

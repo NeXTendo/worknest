@@ -1,6 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { Database } from '@/lib/database.types'
+import type { Database } from '@/lib/database.types'
 
 type EmployeeRow = Database['public']['Tables']['employees']['Row']
 type EmployeeUpdate = Database['public']['Tables']['employees']['Update']
@@ -30,18 +30,17 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   const supabase = createServerSupabaseClient()
-  const body = await request.json() as EmployeeUpdate
+  const body = (await request.json()) as Partial<EmployeeRow> // ⚡ cast to Partial<EmployeeRow>
 
   try {
     const { data, error } = await supabase
       .from('employees')
-      .update(body as any)
+      .update(body) // TS now accepts this
       .eq('id', params.id)
-      .select()
-      .single<EmployeeRow>()
-
+      .select() // returns EmployeeRow[]
+    
     if (error) throw error
-    return NextResponse.json(data)
+    return NextResponse.json(data?.[0] ?? null)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
