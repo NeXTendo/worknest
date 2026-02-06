@@ -1,6 +1,7 @@
 // lib/api-gateway/logger.ts
 import { createServerClient } from '@supabase/ssr'
-import { Database } from '@/types/database.types'
+import { Database } from '@/lib/database.types'
+import { insertRecord } from '@/lib/supabase/rpc-helpers'
 
 interface LogEntry {
   method: string
@@ -47,7 +48,7 @@ export async function logApiRequest(entry: LogEntry): Promise<void> {
         }
       )
       
-      await supabase.from('audit_logs').insert({
+      await insertRecord(supabase, 'audit_logs', {
         company_id: entry.companyId,
         user_id: entry.userId,
         action: `API_${entry.method}`,
@@ -58,7 +59,7 @@ export async function logApiRequest(entry: LogEntry): Promise<void> {
           duration: entry.duration,
           status: entry.status,
           error: entry.error,
-        },
+        } as any,
         ip_address: entry.ip,
         user_agent: null,
       })

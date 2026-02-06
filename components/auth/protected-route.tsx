@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { fetchRecord } from '@/lib/supabase/rpc-helpers'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -29,11 +30,11 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
       }
 
       if (requiredRole && requiredRole.length > 0) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single()
+        const { data: profile } = await fetchRecord(
+          supabase,
+          'profiles',
+          user.id
+        )
 
         if (!profile || !requiredRole.includes(profile.role)) {
           router.push('/dashboard/dashboard')

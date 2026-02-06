@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/useToast'
+import { insertRecord } from '@/lib/supabase/rpc-helpers'
 
 interface LeaveFormProps {
   onSuccess?: () => void
@@ -37,11 +37,19 @@ export function LeaveForm({ onSuccess, onCancel }: LeaveFormProps) {
       const end = new Date(formData.end_date)
       const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-      const { error } = await supabase.from('leave_requests').insert({
-        ...formData,
-        days_requested: days,
-        status: 'pending',
-      })
+      const { error } = await insertRecord(
+        supabase,
+        'leave_requests',
+        {
+          employee_id: user.id,
+          leave_type: formData.leave_type as any,
+          start_date: formData.start_date,
+          end_date: formData.end_date,
+          reason: formData.reason,
+          days_requested: days,
+          status: 'pending',
+        }
+      )
 
       if (error) throw error
 
@@ -83,8 +91,9 @@ export function LeaveForm({ onSuccess, onCancel }: LeaveFormProps) {
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label>Start Date</Label>
+          <Label htmlFor="start_date">Start Date</Label>
           <Input
+            id="start_date"
             type="date"
             value={formData.start_date}
             onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
@@ -92,8 +101,9 @@ export function LeaveForm({ onSuccess, onCancel }: LeaveFormProps) {
           />
         </div>
         <div>
-          <Label>End Date</Label>
+          <Label htmlFor="end_date">End Date</Label>
           <Input
+            id="end_date"
             type="date"
             value={formData.end_date}
             onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
@@ -103,12 +113,16 @@ export function LeaveForm({ onSuccess, onCancel }: LeaveFormProps) {
       </div>
 
       <div>
-        <Label>Reason</Label>
-        <Textarea
+        <Label htmlFor="reason">Reason</Label>
+        <textarea
+          id="reason"
+          className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           value={formData.reason}
           onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
           required
           rows={4}
+          placeholder="Enter the reason for your leave request"
+          title="Reason for leave"
         />
       </div>
 

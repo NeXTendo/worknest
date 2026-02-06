@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchRecord } from '@/lib/supabase/rpc-helpers'
 
 interface RoleGateProps {
   children: React.ReactNode
@@ -26,13 +27,13 @@ export function RoleGate({ children, allowedRoles, fallback }: RoleGateProps) {
         return
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
+      const { data: profile } = await fetchRecord(
+        supabase,
+        'profiles',
+        user.id
+      )
 
-      setHasAccess(profile && allowedRoles.includes(profile.role))
+      setHasAccess(!!(profile && allowedRoles.includes(profile.role)))
     } catch (error) {
       setHasAccess(false)
     } finally {

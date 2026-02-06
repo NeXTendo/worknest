@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/useToast'
+import { insertRecord } from '@/lib/supabase/rpc-helpers'
 
 interface EmployeeFormProps {
   onSuccess?: () => void
@@ -63,11 +64,11 @@ export function EmployeeForm({ onSuccess, onCancel }: EmployeeFormProps) {
     setLoading(true)
 
     try {
-      const { data, error } = await supabase
-        .from('employees')
-        .insert([formData])
-        .select()
-        .single()
+      const { data, error } = await insertRecord(
+        supabase,
+        'employees',
+        formData as any // Cast to any to bypass strict type checking against EmployeeInsert for now if needed, or rely on loose match
+      )
 
       if (error) throw error
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { Calendar } from '@/components/ui/calendar'
+import Calendar from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { CalendarIcon } from 'lucide-react'
@@ -37,7 +37,7 @@ export function DateRangePicker({ from, to, onSelect }: DateRangePickerProps) {
           mode="range"
           defaultMonth={from}
           selected={{ from, to }}
-          onSelect={(range) => onSelect(range?.from, range?.to)}
+          onSelect={(range: any) => onSelect(range?.from, range?.to)}
           numberOfMonths={2}
         />
       </PopoverContent>

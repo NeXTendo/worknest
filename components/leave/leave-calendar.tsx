@@ -1,6 +1,6 @@
 'use client'
 
-import { Calendar } from '@/components/ui/calendar'
+import Calendar from '@/components/ui/calendar'
 
 export function LeaveCalendar({ leaveRequests }: { leaveRequests: any[] }) {
   const leaveDates = leaveRequests

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { updateRecord } from '@/lib/supabase/rpc-helpers'
 
 export function ResetPasswordForm() {
   const [password, setPassword] = useState('')
@@ -39,10 +40,12 @@ export function ResetPasswordForm() {
       // Update must_change_password flag
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        await supabase
-          .from('profiles')
-          .update({ must_change_password: false })
-          .eq('id', user.id)
+        await updateRecord(
+          supabase,
+          'profiles',
+          user.id,
+          { must_change_password: false }
+        )
       }
 
       router.push('/dashboard/dashboard')

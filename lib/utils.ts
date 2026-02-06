@@ -32,14 +32,14 @@ export function formatDate(
   const dateObj = typeof date === 'string' ? new Date(date) : date
   
   const options: Intl.DateTimeFormatOptions = {
-    short: { year: 'numeric', month: 'short', day: 'numeric' },
-    long: { year: 'numeric', month: 'long', day: 'numeric' },
+    short: { year: 'numeric', month: 'short', day: 'numeric' } as const,
+    long: { year: 'numeric', month: 'long', day: 'numeric' } as const,
     full: { 
       weekday: 'long', 
       year: 'numeric', 
       month: 'long', 
       day: 'numeric' 
-    },
+    } as const,
   }[format]
   
   return new Intl.DateTimeFormat('en-US', options).format(dateObj)

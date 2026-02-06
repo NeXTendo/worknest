@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AlertCircle, LogIn, Loader2 } from 'lucide-react'
+import { fetchRecord } from '@/lib/supabase/rpc-helpers'
 
 interface LoginFormProps {
   redirectTo?: string // optional redirect after login
@@ -43,13 +44,14 @@ export default function LoginForm({ redirectTo = '/dashboard' }: LoginFormProps)
       if (!authData.user) throw new Error('Login failed - no user returned')
 
       // Fetch profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('must_change_password, is_active')
-        .eq('id', authData.user.id)
-        .single()
+      const { data: profile, error: profileError } = await fetchRecord(
+        supabase,
+        'profiles',
+        authData.user.id
+      )
 
       if (profileError) throw profileError
+      if (!profile) throw new Error('Profile not found')
 
       if (!profile.is_active) {
         await supabase.auth.signOut()

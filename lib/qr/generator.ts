@@ -1,5 +1,6 @@
 import QRCode from 'qrcode'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { insertRecord, fetchRecords } from '@/lib/supabase/rpc-helpers'
 
 export async function generateAttendanceQR(companyId: string): Promise<string> {
   const supabase = createServerSupabaseClient()
@@ -12,7 +13,7 @@ export async function generateAttendanceQR(companyId: string): Promise<string> {
   const validUntil = new Date(validFrom.getTime() + 8 * 60 * 60 * 1000)
   
   // Save to database
-  await supabase.from('qr_codes').insert({
+  await insertRecord(supabase, 'qr_codes', {
     company_id: companyId,
     code,
     type: 'attendance',
@@ -37,14 +38,18 @@ export async function generateAttendanceQR(companyId: string): Promise<string> {
 export async function validateQRCode(code: string): Promise<boolean> {
   const supabase = createServerSupabaseClient()
   
-  const { data, error } = await supabase
-    .from('qr_codes')
-    .select('*')
-    .eq('code', code)
-    .eq('is_active', true)
-    .single()
+  const { data: records, error } = await fetchRecords(
+    supabase,
+    'qr_codes',
+    {
+      filters: { code, is_active: true },
+      limit: 1
+    }
+  )
   
-  if (error || !data) return false
+  if (error || !records || records.length === 0) return false
+  
+  const data = records[0]
   
   const now = new Date()
   const validFrom = new Date(data.valid_from)

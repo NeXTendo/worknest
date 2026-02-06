@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/useToast'
+import { updateRecord } from '@/lib/supabase/rpc-helpers'
 
 interface LeaveApprovalProps {
   leaveId: string
@@ -20,14 +20,16 @@ export function LeaveApproval({ leaveId, onComplete }: LeaveApprovalProps) {
   const handleAction = async (action: 'approved' | 'rejected') => {
     setLoading(true)
     try {
-      const { error } = await supabase
-        .from('leave_requests')
-        .update({
+      const { error } = await updateRecord(
+        supabase,
+        'leave_requests',
+        leaveId,
+        {
           status: action,
-          rejection_reason: action === 'rejected' ? notes : null,
-          approved_at: action === 'approved' ? new Date().toISOString() : null,
-        })
-        .eq('id', leaveId)
+          review_notes: action === 'rejected' ? notes : null,
+          reviewed_at: new Date().toISOString(),
+        }
+      )
 
       if (error) throw error
 
@@ -50,7 +52,8 @@ export function LeaveApproval({ leaveId, onComplete }: LeaveApprovalProps) {
 
   return (
     <div className="space-y-4">
-      <Textarea
+      <textarea
+        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         placeholder="Add notes (required for rejection)"
         value={notes}
         onChange={(e) => setNotes(e.target.value)}

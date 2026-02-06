@@ -1,10 +1,11 @@
 // lib/api-gateway/middleware.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { Database } from '@/types/database.types'
+import { Database } from '@/lib/database.types'
 import { rateLimit } from './rate-limiter'
 import { logApiRequest } from './logger'
 import { validateRequest } from './validator'
+import { fetchRecord } from '@/lib/supabase/rpc-helpers'
 
 export interface ApiContext {
   user: {
@@ -127,11 +128,12 @@ export async function apiGateway(
       }
 
       // Fetch user profile for role and company
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role, company_id, is_active')
-        .eq('id', authUser.id)
-        .single()
+      // Fetch user profile for role and company
+      const { data: profile, error: profileError } = await fetchRecord(
+        supabase,
+        'profiles',
+        authUser.id
+      )
 
       if (profileError || !profile) {
         return NextResponse.json(

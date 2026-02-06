@@ -130,6 +130,8 @@ export interface Database {
       payroll_status: PayrollStatus
       attendance_status: AttendanceStatus
     }
+    Views: Record<string, never>
+    CompositeTypes: Record<string, never>
   }
 }
 
