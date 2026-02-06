@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { fetchRecord, insertRecord } from '@/lib/supabase/rpc-helpers'
 import { NextResponse } from 'next/server'
 import QRCode from 'qrcode'
 
@@ -13,13 +14,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('id', user.id)
-      .single()
+    // Use fetchRecord helper which handles types better
+    const { data: profile, error: profileError } = await fetchRecord(
+      supabase,
+      'profiles',
+      user.id
+    )
 
-    if (!profile?.company_id) {
+    if (profileError || !profile) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 400 })
+    }
+
+    if (!profile.company_id) {
       return NextResponse.json({ error: 'Company not found' }, { status: 400 })
     }
 
@@ -29,19 +35,22 @@ export async function POST(request: Request) {
     const validUntil = new Date()
     validUntil.setHours(23, 59, 59, 999)
 
-    // Save to database
-    const { data: qrData, error: dbError } = await supabase
-      .from('qr_codes')
-      .insert({
+    // Save to database using insertRecord helper
+    // We need to cast the data to any because the helper expects strict types 
+    // but we're constructing the object dynamically
+    const { data: qrData, error: dbError } = await insertRecord(
+      supabase,
+      'qr_codes',
+      {
+        company_id: profile.company_id, // Essential field
         code,
         type: 'attendance',
         valid_from: now.toISOString(),
         valid_until: validUntil.toISOString(),
         is_active: true,
-        metadata: { employee_id }, // Store employee_id in metadata since it's not a direct column
-      })
-      .select()
-      .single()
+        metadata: { employee_id },
+      }
+    )
 
     if (dbError) throw dbError
 

@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { updateRecord, fetchRecord, deleteRecord } from '@/lib/supabase/rpc-helpers'
 import { NextResponse } from 'next/server'
 import type { Database } from '@/lib/database.types'
 
@@ -12,11 +13,7 @@ export async function GET(
   const supabase = createServerSupabaseClient()
 
   try {
-    const { data, error } = await supabase
-      .from('employees')
-      .select('*')
-      .eq('id', params.id)
-      .single<EmployeeRow>()
+    const { data, error } = await fetchRecord(supabase, 'employees', params.id)
 
     if (error) throw error
     return NextResponse.json(data)
@@ -30,17 +27,27 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   const supabase = createServerSupabaseClient()
-  const body = (await request.json()) as Partial<EmployeeRow> // ⚡ cast to Partial<EmployeeRow>
+  const body = await request.json()
 
   try {
-    const { data, error } = await supabase
-      .from('employees')
-      .update(body) // TS now accepts this
-      .eq('id', params.id)
-      .select() // returns EmployeeRow[]
+    const { data: recordId, error } = await updateRecord(
+      supabase,
+      'employees',
+      params.id,
+      body
+    )
     
     if (error) throw error
-    return NextResponse.json(data?.[0] ?? null)
+    
+    // Fetch the updated record to return it
+    const { data: updatedEmployee, error: fetchError } = await fetchRecord(
+      supabase,
+      'employees',
+      params.id
+    )
+    
+    if (fetchError) throw fetchError
+    return NextResponse.json(updatedEmployee)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
@@ -53,10 +60,7 @@ export async function DELETE(
   const supabase = createServerSupabaseClient()
 
   try {
-    const { error } = await supabase
-      .from('employees')
-      .delete()
-      .eq('id', params.id)
+    const { error } = await deleteRecord(supabase, 'employees', params.id)
 
     if (error) throw error
     return NextResponse.json({ success: true })

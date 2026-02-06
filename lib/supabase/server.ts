@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { SupabaseClient } from '@supabase/supabase-js'
-import { Database } from '@/types/supabase'
+import { Database, Profile, Company } from '@/lib/database.types'
 
 // Logger utility
 const logger = {
@@ -113,6 +113,9 @@ export function createServerSupabaseClient(): SupabaseClient<Database> {
             'X-Client-Info': 'worknest-server-client',
           },
         },
+        db: {
+          schema: 'public',
+        },
       }
     )
 
@@ -194,7 +197,7 @@ export const serverClient = {
       }
 
       logger.info('getUserProfile', 'Profile fetched successfully')
-      return { data, error: null }
+      return { data: data as Profile, error: null }
     } catch (error) {
       logger.error('getUserProfile', error)
       return { data: null, error }
@@ -220,7 +223,7 @@ export const serverClient = {
       }
 
       logger.info('getUserCompany', 'Company fetched successfully')
-      return { data, error: null }
+      return { data: data as Company, error: null }
     } catch (error) {
       logger.error('getUserCompany', error)
       return { data: null, error }

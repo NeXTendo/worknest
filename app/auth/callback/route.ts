@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { fetchRecord } from '@/lib/supabase/rpc-helpers'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
@@ -26,11 +27,12 @@ export async function GET(request: Request) {
       }
 
       // Check if profile exists and needs password reset
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('must_change_password, is_active')
-        .eq('id', user.id)
-        .single()
+      // Use fetchRecord helper to avoid strict type inference issues
+      const { data: profile, error: profileError } = await fetchRecord(
+        supabase,
+        'profiles',
+        user.id
+      )
 
       if (profileError) {
         console.error('Profile fetch error:', profileError)

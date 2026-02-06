@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { fetchRecord } from '@/lib/supabase/rpc-helpers'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -30,13 +31,14 @@ export default function LoginPage() {
       if (authError) throw authError
       if (!authData.user) throw new Error('Login failed')
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('must_change_password, is_active')
-        .eq('id', authData.user.id)
-        .single()
+      // Use fetchRecord helper to avoid strict type inference issues
+      const { data: profile, error: profileError } = await fetchRecord(
+        supabase,
+        'profiles',
+        authData.user.id
+      )
 
-      if (profileError) throw new Error('Failed to load profile')
+      if (profileError || !profile) throw new Error('Failed to load profile')
       if (!profile.is_active) {
         await supabase.auth.signOut()
         throw new Error('Your account is deactivated')

@@ -1,9 +1,11 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { Database, EmploymentType } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
 import { Resend } from 'resend'
 import { generateEmployeeId, generateDefaultPassword } from '@/lib/utils'
+import { insertRecord, fetchRecord, countRecords } from '@/lib/supabase/rpc-helpers'
 
 const resend = new Resend(process.env.RESEND_API_KEY!)
 
@@ -14,7 +16,7 @@ interface CreateEmployeeInput {
   date_of_birth: string
   department_id: string
   job_title_id: string
-  employment_type: string
+  employment_type: EmploymentType
   hire_date: string
   base_salary: number
   // ... other fields
@@ -28,19 +30,15 @@ export async function createEmployee(input: CreateEmployeeInput) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Unauthorized')
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile) throw new Error('Profile not found')
+    const { data: profile, error: profileFetchError } = await fetchRecord(supabase, 'profiles', user.id)
+    if (profileFetchError || !profile || !profile.company_id) throw new Error('Profile or Company ID not found')
 
     // Generate employee number
-    const { count } = await supabase
-      .from('employees')
-      .select('*', { count: 'exact', head: true })
-      .eq('company_id', profile.company_id)
+    const { count, error: countError } = await countRecords(supabase, 'employees', {
+      company_id: profile.company_id
+    })
+
+    if (countError) throw new Error('Failed to generate employee number')
 
     const employee_number = generateEmployeeId(count || 0)
 
@@ -61,7 +59,7 @@ export async function createEmployee(input: CreateEmployeeInput) {
     if (authError) throw authError
 
     // Create profile
-    await supabase.from('profiles').insert({
+    const { error: profileError } = await insertRecord(supabase, 'profiles', {
       id: authUser.user.id,
       company_id: profile.company_id,
       role: 'employee',
@@ -70,21 +68,33 @@ export async function createEmployee(input: CreateEmployeeInput) {
       first_name: input.first_name,
       last_name: input.last_name,
       must_change_password: true,
+      // Add required fields with default values or keep them optional if defined as such in usage
+      is_active: true,
+      preferences: {},
     })
+    
+    if (profileError) {
+      // Cleanup auth user if profile creation fails? For now just throw
+      console.error('Error creating profile:', profileError)
+      throw new Error('Failed to create profile')
+    }
 
     // Create employee record
-    const { data: employee, error: employeeError } = await supabase
-      .from('employees')
-      .insert({
-        company_id: profile.company_id,
-        user_id: authUser.user.id,
-        employee_number,
-        ...input,
-      })
-      .select()
-      .single()
+    const { data: employeeId, error: employeeInsertError } = await insertRecord(supabase, 'employees', {
+      company_id: profile.company_id,
+      user_id: authUser.user.id,
+      employee_number,
+      ...input,
+      // Ensure required fields are present. Input covers most.
+      is_active: true,
+    })
 
-    if (employeeError) throw employeeError
+    if (employeeInsertError) throw employeeInsertError
+    if (!employeeId) throw new Error('Failed to retrieve employee ID')
+
+    const { data: employee, error: employeeFetchError } = await fetchRecord(supabase, 'employees', employeeId)
+
+    if (employeeFetchError) throw employeeFetchError
 
     // Send welcome email
     await resend.emails.send({

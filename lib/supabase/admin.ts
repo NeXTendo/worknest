@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import { Database } from '@/types/supabase'
+import { Database } from '@/lib/database.types'
 
 // Logger utility
 const logger = {
