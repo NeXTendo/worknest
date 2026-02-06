@@ -3,6 +3,9 @@ import { getCompanySettings } from './actions'
 import { CompanyDetailsForm } from './CompanyDetailsForm'
 import { BrandingForm } from './BrandingForm'
 
+
+export const dynamic = 'force-dynamic'
+
 export default async function SettingsPage() {
   const { company, isAdmin } = await getCompanySettings()
 
