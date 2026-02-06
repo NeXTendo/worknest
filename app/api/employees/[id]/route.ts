@@ -1,15 +1,22 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { Database } from '@/lib/database.types'
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+type EmployeeRow = Database['public']['Tables']['employees']['Row']
+type EmployeeUpdate = Database['public']['Tables']['employees']['Update']
+
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   const supabase = createServerSupabaseClient()
-  
+
   try {
     const { data, error } = await supabase
       .from('employees')
       .select('*')
       .eq('id', params.id)
-      .single()
+      .single<EmployeeRow>()
 
     if (error) throw error
     return NextResponse.json(data)
@@ -18,17 +25,20 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   const supabase = createServerSupabaseClient()
-  const body = await request.json()
-  
+  const body = await request.json() as EmployeeUpdate
+
   try {
     const { data, error } = await supabase
       .from('employees')
-      .update(body)
+      .update(body as any)
       .eq('id', params.id)
       .select()
-      .single()
+      .single<EmployeeRow>()
 
     if (error) throw error
     return NextResponse.json(data)
@@ -37,9 +47,12 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   const supabase = createServerSupabaseClient()
-  
+
   try {
     const { error } = await supabase
       .from('employees')

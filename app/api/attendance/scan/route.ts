@@ -1,5 +1,8 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { Database } from '@/lib/database.types'
+
+type Employee = Database['public']['Tables']['employees']['Row']
 
 export async function GET(request: Request) {
   const supabase = createServerSupabaseClient()
@@ -36,19 +39,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('id', user.id)
-      .single()
+    const { data: employee, error: employeeError } = await supabase
+      .from('employees')
+      .select('id, company_id')
+      .eq('user_id', user.id)
+      .single<Pick<Employee, 'id' | 'company_id'>>()
 
-    if (!profile?.company_id) {
-      return NextResponse.json({ error: 'Company not found' }, { status: 400 })
+    if (employeeError || !employee) {
+      return NextResponse.json({ error: 'Employee record not found' }, { status: 400 })
     }
 
     const { data, error } = await supabase
       .from('attendance')
-      .insert({ ...body, company_id: profile.company_id })
+      .insert({
+        ...body,
+        employee_id: employee.id,
+      })
       .select()
       .single()
 

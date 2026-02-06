@@ -1,5 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { Database } from '@/lib/database.types'
+
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -23,11 +25,15 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${origin}/auth/login?error=no_user`)
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('must_change_password, is_active')
-        .eq('id', user.id)
-        .single()
+type ProfileRow = Database['public']['Tables']['profiles']['Row']
+
+const { data: profile, error: profileError } = await supabase
+  .from('profiles')
+  .select('*')
+  .eq('id', user.id)
+  .single<ProfileRow>()
+
+
 
       if (profileError) {
         console.error('Profile fetch error:', profileError)

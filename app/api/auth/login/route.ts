@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/client'
+import { Database } from '@/lib/database.types' // <- import your DB types
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,12 +39,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Login failed - no user returned' }, { status: 500 })
     }
 
-    // Step 3: Fetch profile
+    // Step 3: Fetch profile with correct typing
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('company_id, role, must_change_password, is_active')
       .eq('id', authData.user.id)
-      .single()
+      .single<Database['public']['Tables']['profiles']['Row']>() // <- explicitly type it
 
     if (profileError || !profile) {
       return NextResponse.json({ error: 'Failed to load user profile' }, { status: 500 })

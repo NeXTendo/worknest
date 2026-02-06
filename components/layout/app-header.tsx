@@ -27,10 +27,28 @@ export function AppHeader() {
   const supabase = createClient()
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    logout()
-    router.push('/auth/login')
+  try {
+    // Call server logout route
+    const res = await fetch('/api/logout', { method: 'POST' })
+    const data = await res.json()
+
+    if (data.success) {
+      // Reset your browser client singleton
+      import('@/lib/supabase/client').then(mod => mod.resetBrowserClient())
+
+      // Clear auth store
+      logout()
+
+      // Redirect to login page
+      router.push('/auth/login')
+    } else {
+      console.error('Logout failed', data.error)
+    }
+  } catch (error) {
+    console.error('Logout exception', error)
   }
+}
+
 
   const getInitials = () => {
     if (user?.first_name && user?.last_name) {
