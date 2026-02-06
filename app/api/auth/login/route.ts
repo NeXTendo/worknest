@@ -1,4 +1,3 @@
-// app/api/auth/login/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/client'
 
@@ -17,7 +16,7 @@ export async function POST(req: NextRequest) {
       .from('login_identifiers')
       .select('email')
       .eq('identifier', identifier.trim())
-      .single()
+      .single<{ email: string }>()
 
     if (lookupError || !lookup?.email) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -51,7 +50,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (!profile.is_active) {
-      // Immediately sign out
       await supabase.auth.signOut()
       return NextResponse.json({ error: 'Account deactivated. Contact support.' }, { status: 403 })
     }
