@@ -5,6 +5,7 @@ import { adminClient } from '@/lib/supabase/admin' // Keep for potential admin b
 // Actually, for attendance logging, regular users might need to insert, subject to RLS. 
 // But QR verification might need broader access or specific RPC.
 import { fetchRecord, fetchRecords, insertRecord, updateRecord } from '@/lib/supabase/rpc-helpers'
+import { AttendanceStatus } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
 import QRCode from 'qrcode'
 
@@ -64,21 +65,20 @@ export async function generateAttendanceQR(formData: FormData) {
   }
 }
 
-export async function logAttendance(code: string) {
+export async function logAttendance(code: string, location?: string) {
   const supabase = createServerSupabaseClient()
   const { user } = await serverClient.getUser()
   if (!user) return { error: 'Unauthorized' }
+
+  // Get IP address from headers
+  const { headers } = await import('next/headers')
+  const headerList = await headers()
+  const ipAddress = headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1'
 
   const { data: profile } = await fetchRecord(supabase, 'profiles', user.id)
   if (!profile?.company_id || !profile?.employee_id) return { error: 'Employee profile not found' }
 
   // 1. Verify QR Code
-  // We use adminClient to fetch QR code to ensure we can see it even if RLS is strict (though employees should ideally be able to "see" active QRs of their company)
-  // Let's stick to standard client first, fallback to admin if needed.
-  // Actually, to prevent users from listing all QRs, RLS might be strict.
-  // But they need to verify a specific one.
-  // Let's use `fetchRecords` with a filter.
-  
   const { data: qrRecords, error: qrError } = await fetchRecords(supabase, 'qr_codes', {
     filters: { code: code, is_active: true },
     limit: 1
@@ -89,21 +89,17 @@ export async function logAttendance(code: string) {
   }
 
   const qr = qrRecords[0]
-  
-  // Verify Company Match
   if (qr.company_id !== profile.company_id) {
-     // Check if Super Admin allowing cross-company? Unlikely for attendance.
-     return { error: 'Invalid QR code for your company' }
+    return { error: 'Invalid QR code for your company' }
   }
 
-  // Verify Expiry
   const now = new Date()
   if (new Date(qr.valid_until) < now) {
     return { error: 'QR Code has expired' }
   }
 
   // 2. Determine Action (Check In vs Check Out)
-  const today = new Date().toISOString().split('T')[0]
+  const today = now.toISOString().split('T')[0]
   
   // Fetch existing attendance for today
   const { data: attendanceRecords } = await fetchRecords(supabase, 'attendance', {
@@ -123,65 +119,71 @@ export async function logAttendance(code: string) {
     }
     
     // Process Check Out
-    const timeIn = new Date(`${today}T${existingRecord.time_in}`) // Assuming time_in is just 'HH:MM:SS' or full ISO? 
-    // The DB type says string | null. Usually Postgres Time or Timestamptz. 
-    // Let's assume it stores just the time 'HH:MM:SS' based on standard practice or full ISO if Timestamptz.
-    // Looking at `types`, it's just `string`.
-    // Let's assume we store it as full ISO string for safety or just Time. 
-    // Let's use full ISO for calculation.
+    if (!existingRecord.time_in) {
+      return { error: 'Invalid attendance record: missing check-in time' }
+    }
+    const timeIn = new Date(existingRecord.time_in)
+    const timeOut = now
     
-    // Wait, if we use `time` type in Postgres, it's just time.
-    // Let's check how we want to store it. 
-    // Best to store `time_in` as the timestamp or at least time string.
-    // Let's use standard ISO string for now.
+    // Calculate hours worked (in hours, decimal)
+    const diffMs = timeOut.getTime() - timeIn.getTime()
+    const hoursWorked = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100
     
-    const nowTime = now.toLocaleTimeString('en-US', { hour12: false }) // "14:30:00"
-    
-    // Calculate hours worked
-    // If we only stored String "HH:MM:SS" we need to combine with Date.
-    // Let's assume standard format.
-    
-    // FIX: To be safe, let's fetch the record layout again or assume standard.
-    // Let's just update `time_out` and `status`.
-    
-    await updateRecord(supabase, 'attendance', existingRecord.id, {
-      time_out: nowTime,
-      status: 'present', // or 'completed'
-      // hours_worked calculation could be done here or in a trigger.
-      // Let's do a simple calc if possible, or leave null for now.
+    // Calculate overtime (if > 8 hours)
+    const overtimeHours = Math.max(0, hoursWorked - 8)
+
+    const { error: updateError } = await updateRecord(supabase, 'attendance', existingRecord.id, {
+      time_out: timeOut.toISOString(),
+      hours_worked: hoursWorked,
+      overtime_hours: overtimeHours,
+      location: location || existingRecord.location, // Update location or keep old
+      ip_address: ipAddress,
     })
     
-    message = 'Successfully checked out!'
+    if (updateError) throw updateError
+    message = `Successfully checked out! Worked ${hoursWorked} hours.`
   } else {
     // Process Check In
-    const nowTime = now.toLocaleTimeString('en-US', { hour12: false })
+    const timeIn = now
     
-    // Determine status (Late?)
-    // Hardcoded logic for 9 AM for now, or fetch Shift info.
-    // Let's default to 'present'.
+    // Calculate lateness (Default 09:00 AM)
+    const shiftStart = new Date(now)
+    shiftStart.setHours(9, 0, 0, 0)
     
-    await insertRecord(supabase, 'attendance', {
+    let lateByMinutes = 0
+    let status: AttendanceStatus = 'present'
+    
+    if (timeIn > shiftStart) {
+      lateByMinutes = Math.floor((timeIn.getTime() - shiftStart.getTime()) / (1000 * 60))
+      status = 'late'
+    }
+    
+    const { error: insertError } = await insertRecord(supabase, 'attendance', {
       company_id: profile.company_id,
       employee_id: profile.employee_id,
       date: today,
-      time_in: nowTime,
-      status: 'present'
+      time_in: timeIn.toISOString(),
+      status: status,
+      late_by_minutes: lateByMinutes,
+      location: location || 'Unknown',
+      ip_address: ipAddress,
     })
     
-    message = 'Successfully checked in!'
+    if (insertError) throw insertError
+    message = lateByMinutes > 0 
+      ? `Successfully checked in! You are ${lateByMinutes} minutes late.` 
+      : 'Successfully checked in!'
   }
   
-  // Increment usage count for QR
-  // Use admin client to bypass RLS for incrementing generic counter if needed, 
-  // but let's try standard update first. User might not have update permission on QR codes.
-  // Using RPC would be better, but simple update via admin is easier here.
-  
-  await (adminClient.client as any) // Type assertion to avoid annoying strict check
-    .from('qr_codes')
+  // Increment usage count for QR via Admin Client
+  await (adminClient.client
+    .from('qr_codes') as any)
     .update({ usage_count: (qr.usage_count || 0) + 1 })
     .eq('id', qr.id)
 
   revalidatePath('/dashboard/attendance')
+  revalidatePath('/dashboard') // Revalidate main dashboard too
+  
   return { success: true, message }
 }
 

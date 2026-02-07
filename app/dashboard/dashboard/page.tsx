@@ -228,11 +228,11 @@ function CompanyDashboard() {
 
       // Fetch today's attendance
       const today = new Date().toISOString().split('T')[0]
-      const { count: presentCount } = await supabase
+      const { count: presentTodayCount } = await supabase
         .from('attendance')
         .select('*', { count: 'exact', head: true })
         .eq('date', today)
-        .eq('status', 'present')
+        .in('status', ['present', 'late', 'half_day'])
 
       // Fetch pending leave requests
       const { count: leaveCount } = await supabase
@@ -269,7 +269,7 @@ function CompanyDashboard() {
         : 0
 
       // Calculate attendance rate
-      const attendanceRate = employeeCount ? (presentCount || 0) / employeeCount * 100 : 0
+      const attendanceRate = employeeCount ? (presentTodayCount || 0) / employeeCount * 100 : 0
 
       // Fetch recent activity
       const recentActivities: ActivityItem[] = []
@@ -326,7 +326,7 @@ function CompanyDashboard() {
 
       setStats({
         totalEmployees: employeeCount || 0,
-        presentToday: presentCount || 0,
+        presentToday: presentTodayCount || 0,
         monthlyPayroll,
         pendingLeave: leaveCount || 0,
         employeeGrowth,
