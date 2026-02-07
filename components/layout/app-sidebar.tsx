@@ -137,7 +137,7 @@ export function AppSidebar() {
 
       <aside
         className={cn(
-          'fixed left-0 top-0 z-50 h-screen text-white transition-all duration-300 shadow-xl',
+          'fixed left-0 top-0 z-50 h-[100dvh] flex flex-col text-white transition-all duration-300 shadow-xl',
           'lg:translate-x-0', // Always visible on desktop
           mobileSidebarOpen ? 'translate-x-0 w-[280px]' : '-translate-x-full lg:w-20', // Mobile toggle
           sidebarOpen && 'lg:w-64' // Desktop expand
