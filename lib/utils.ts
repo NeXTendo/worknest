@@ -75,13 +75,14 @@ export function generateEmployeeId(count: number): string {
 }
 
 /**
- * Generate default password (mmyyyy from birth date)
+ * Generate default password (first letter of first name lowercase + mmyyyy from birth date)
  */
-export function generateDefaultPassword(birthDate: Date | string): string {
+export function generateDefaultPassword(firstName: string, birthDate: Date | string): string {
+  const firstLetter = firstName.charAt(0).toLowerCase()
   const date = typeof birthDate === 'string' ? new Date(birthDate) : birthDate
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const year = date.getFullYear()
-  return `${month}${year}`
+  return `${firstLetter}${month}${year}`
 }
 
 /**

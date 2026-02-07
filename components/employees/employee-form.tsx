@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/useToast'
 import { insertRecord } from '@/lib/supabase/rpc-helpers'
+import { createEmployee } from '@/app/dashboard/employees/actions'
+import { useAuthStore } from '@/store/useAuthStore'
 
 interface EmployeeFormProps {
   employeeId?: string | null
@@ -16,6 +18,11 @@ interface EmployeeFormProps {
 }
 
 interface Department {
+  id: string
+  name: string
+}
+
+interface Company {
   id: string
   name: string
 }
@@ -43,11 +50,16 @@ interface EmployeeFormData {
   emergency_contact_relationship: string
   bank_name: string
   bank_account_number: string
+  company_id?: string
 }
 
 export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormProps) {
   const [loading, setLoading] = useState(false)
   const [departments, setDepartments] = useState<Department[]>([])
+  const [companies, setCompanies] = useState<Company[]>([])
+  const { user: currentUser } = useAuthStore()
+  const isSuperAdmin = currentUser?.role === 'super_admin'
+
   const [formData, setFormData] = useState<EmployeeFormData>({
     // Personal
     first_name: '',
@@ -80,6 +92,7 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
     // Bank
     bank_name: '',
     bank_account_number: '',
+    company_id: '',
   })
 
   const supabase = createClient()
@@ -94,11 +107,18 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
 
   async function fetchMetadata() {
     try {
-      const [deptRes] = await Promise.all([
-        supabase.from('departments').select('id, name').eq('is_active', true).order('name'),
-      ])
+      const promises: Promise<any>[] = [
+        supabase.from('departments').select('id, name').eq('is_active', true).order('name') as any,
+      ]
+
+      if (isSuperAdmin) {
+        promises.push(supabase.from('companies').select('id, name').order('name') as any)
+      }
+
+      const [deptRes, companyRes] = await Promise.all(promises)
 
       if (deptRes.data) setDepartments(deptRes.data)
+      if (companyRes?.data) setCompanies(companyRes.data)
     } catch (error) {
       console.error('Error fetching metadata:', error)
     }
@@ -141,6 +161,7 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
           emergency_contact_relationship: emp.emergency_contact_relationship || '',
           bank_name: emp.bank_name || '',
           bank_account_number: emp.bank_account_number || '',
+          company_id: emp.company_id || '',
         })
       }
     } catch (error: any) {
@@ -187,12 +208,16 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
           .eq('id', employeeId)
         error = updateError
       } else {
-        const { error: insertError } = await (insertRecord as any)(
-          supabase,
-          'employees',
-          payload
-        )
-        error = insertError
+        // Use the new server action for creation to handle auth provisioning
+        const result = await createEmployee({
+          ...payload,
+          employment_type: payload.employment_type as any,
+          company_id: payload.company_id || undefined,
+        })
+
+        if (!result.success) {
+          throw new Error(result.error)
+        }
       }
 
       if (error) throw error
@@ -355,6 +380,21 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
                 placeholder="e.g. Software Engineer, Account Manager"
               />
             </div>
+            {isSuperAdmin && (
+              <div>
+                <Label htmlFor="company_id">Company *</Label>
+                <Select value={formData.company_id} onValueChange={(v) => handleChange('company_id', v)} required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select company" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companies.map((company) => (
+                      <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </TabsContent>
 

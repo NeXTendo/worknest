@@ -145,22 +145,27 @@ export function AppSidebar() {
         style={{ backgroundColor: 'var(--brand-sidebar)' }}
       >
         {/* Logo & Company */}
-        <div className="flex h-20 items-center justify-between px-4 border-b border-white/10 brand-border-alpha">
-          <div className={cn('flex items-center gap-3', !sidebarOpen && 'lg:justify-center')}>
+        <div 
+          className={cn(
+            "relative flex flex-col items-center border-b border-white/10 brand-border-alpha transition-all duration-300",
+            sidebarOpen || mobileSidebarOpen ? "h-auto py-8 px-4" : "h-20 justify-center px-4"
+          )}
+        >
+          <div className={cn('flex flex-col items-center gap-4 w-full', !sidebarOpen && !mobileSidebarOpen && 'lg:justify-center')}>
             {company?.logo_url ? (
               <div 
                 className={cn(
-                  "relative overflow-hidden flex-shrink-0 transition-all duration-300",
-                  sidebarOpen || mobileSidebarOpen ? "h-12 w-12" : "h-10 w-10"
+                  "relative overflow-hidden flex-shrink-0 transition-all duration-300 shadow-lg p-1 bg-white/5 rounded-2xl",
+                  sidebarOpen || mobileSidebarOpen ? "h-20 w-20" : "h-10 w-10"
                 )}
               >
-                <Image src={company.logo_url} alt={company.name} fill className="object-contain" />
+                <Image src={company.logo_url} alt={company.name} fill className="object-contain p-1" />
               </div>
             ) : (
               <div 
                 className={cn(
-                  "rounded-xl flex items-center justify-center text-white font-bold brand-bg transition-all duration-300 shadow-md",
-                  sidebarOpen || mobileSidebarOpen ? "h-12 w-12 text-xl" : "h-10 w-10 text-lg"
+                  "rounded-2xl flex items-center justify-center text-white font-bold brand-bg transition-all duration-300 shadow-lg flex-shrink-0",
+                  sidebarOpen || mobileSidebarOpen ? "h-20 w-20 text-3xl" : "h-10 w-10 text-lg"
                 )}
                 title="Company Logo"
               >
@@ -169,19 +174,26 @@ export function AppSidebar() {
             )}
             
             {(sidebarOpen || mobileSidebarOpen) && (
-              <div className="flex flex-col min-w-0">
-                <span className="font-bold text-base truncate leading-tight">{company?.name || 'WorkNest'}</span>
-                <span className="text-[11px] text-white/60 uppercase tracking-wider font-medium">{user?.role?.replace('_', ' ')}</span>
+              <div className="flex flex-col items-center text-center min-w-0 w-full px-2">
+                <span className="font-bold text-lg truncate w-full leading-tight text-white mb-1">
+                  {company?.name || 'WorkNest'}
+                </span>
+                <span className="text-[10px] text-white/50 uppercase tracking-[0.2em] font-semibold">
+                  {user?.role?.replace('_', ' ')}
+                </span>
               </div>
             )}
           </div>
 
-          {/* Desktop Collapse Button */}
+          {/* Desktop Collapse Button - Absolute Positioned when expanded */}
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleSidebar}
-            className="text-white hover:bg-white/10 hidden lg:flex h-8 w-8"
+            className={cn(
+              "text-white hover:bg-white/10 hidden lg:flex h-8 w-8 transition-all duration-300",
+              sidebarOpen ? "absolute top-2 right-2" : "mt-2" // Adjust based on state if needed, but fixed top-right is cleaner
+            )}
           >
             <ChevronLeft className={cn('h-5 w-5 transition-transform', !sidebarOpen && 'rotate-180')} />
           </Button>
@@ -191,7 +203,7 @@ export function AppSidebar() {
             variant="ghost"
             size="icon"
             onClick={toggleMobileSidebar}
-            className="text-white hover:bg-white/10 lg:hidden"
+            className="text-white hover:bg-white/10 lg:hidden absolute top-2 right-2"
           >
             <X className="h-6 w-6" />
           </Button>
