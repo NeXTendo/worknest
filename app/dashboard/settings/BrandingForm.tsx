@@ -59,6 +59,7 @@ export function BrandingForm({ company, readonly = false }: { company: Company; 
       if (name === 'primary_color') root.style.setProperty('--brand-primary', value)
       if (name === 'secondary_color') root.style.setProperty('--brand-secondary', value)
       if (name === 'accent_color') root.style.setProperty('--brand-accent', value)
+      if (name === 'sidebar_color') root.style.setProperty('--brand-sidebar', value)
     }
   }
 
@@ -128,6 +129,25 @@ export function BrandingForm({ company, readonly = false }: { company: Company; 
                 <div className="flex-1">
                   <p className="text-xs font-medium text-gray-700">Accent</p>
                   <p className="text-[10px] text-gray-400">Highlights & badges</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="sidebar-color" className="text-sm font-semibold">Sidebar Color</Label>
+              <div className="flex gap-3 items-center bg-gray-50 p-3 rounded-lg border">
+                <Input 
+                  id="sidebar-color" 
+                  name="sidebar_color" 
+                  type="color" 
+                  defaultValue={(company.settings as any)?.sidebar_color || '#0F172A'} 
+                  className="w-12 h-12 p-1 border-2 rounded-md cursor-pointer" 
+                  onChange={handleColorChange}
+                  disabled={readonly}
+                />
+                <div className="flex-1">
+                  <p className="text-xs font-medium text-gray-700">Sidebar BG</p>
+                  <p className="text-[10px] text-gray-400">Sidebar background</p>
                 </div>
               </div>
             </div>

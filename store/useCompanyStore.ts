@@ -10,6 +10,7 @@ interface Company {
   accent_color: string
   website?: string
   industry?: string
+  settings?: any
 }
 
 interface CompanyState {

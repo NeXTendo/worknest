@@ -75,6 +75,7 @@ export async function updateCompanyBranding(formData: FormData) {
   const primary_color = formData.get('primary_color') as string
   const secondary_color = formData.get('secondary_color') as string
   const accent_color = formData.get('accent_color') as string
+  const sidebar_color = formData.get('sidebar_color') as string
   
   let logo_url = formData.get('existing_logo') as string
   const logoFile = formData.get('logo') as File
@@ -101,6 +102,10 @@ export async function updateCompanyBranding(formData: FormData) {
     logo_url = publicUrl
   }
 
+  // Get current settings to merge
+  const { data: currentCompany } = await fetchRecord(adminClient.client, 'companies', profile.company_id)
+  const currentSettings = (currentCompany as any)?.settings || {}
+
   // Use admin client to bypass RLS and problematic RPC on companies table
   const { error } = await (adminClient.client as any)
     .from('companies')
@@ -108,7 +113,11 @@ export async function updateCompanyBranding(formData: FormData) {
       primary_color,
       secondary_color,
       accent_color,
-      logo_url
+      logo_url,
+      settings: {
+        ...currentSettings,
+        sidebar_color
+      }
     } as any)
     .eq('id', profile.company_id)
 

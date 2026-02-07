@@ -22,23 +22,27 @@ import { useRouter } from 'next/navigation'
 export function AppHeader() {
   const { user, logout } = useAuthStore()
   const { company } = useCompanyStore()
-  const { sidebarOpen, toggleSidebar } = useUIStore()
+  const { toggleMobileSidebar } = useUIStore()
   const router = useRouter()
   const supabase = createClient()
 
   const handleLogout = async () => {
     try {
-      const res = await fetch('/api/logout', { method: 'POST' })
-      const data = await res.json()
-
-      if (data.success) {
-        import('@/lib/supabase/client').then(mod => mod.resetBrowserClient())
-        await supabase.auth.signOut()
-        logout()
-        router.push('/auth/login')
-      }
+      const res = await fetch('/api/auth/logout', { method: 'POST' })
+      // Even if server fails, we should clear client state
+      
+      import('@/lib/supabase/client').then(mod => mod.resetBrowserClient())
+      await supabase.auth.signOut()
+      logout()
+      router.push('/auth/login')
+      
     } catch (error) {
       console.error('Logout error:', error)
+      // Fallback logout
+      import('@/lib/supabase/client').then(mod => mod.resetBrowserClient())
+      await supabase.auth.signOut()
+      logout()
+      router.push('/auth/login')
     }
   }
 
@@ -55,7 +59,7 @@ export function AppHeader() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={toggleSidebar}
+          onClick={toggleMobileSidebar}
           className="lg:hidden"
         >
           <Menu className="h-5 w-5 text-gray-600" />

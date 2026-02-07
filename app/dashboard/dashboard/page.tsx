@@ -10,10 +10,13 @@ import {
   DollarSign, 
   Calendar,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Briefcase
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { useAuthStore } from '@/store/useAuthStore'
 
+// Types
 interface DashboardStats {
   totalEmployees: number
   presentToday: number
@@ -21,6 +24,13 @@ interface DashboardStats {
   pendingLeave: number
   employeeGrowth: number
   attendanceRate: number
+}
+
+interface EmployeeStats {
+  attendanceRate: number
+  leaveBalance: number
+  hoursWorked: number
+  lateDays: number
 }
 
 interface ActivityItem {
@@ -35,6 +45,167 @@ interface DepartmentData {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuthStore()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) return <DashboardSkeleton />
+
+  if (user?.role === 'employee' || user?.role === 'manager') {
+    return <EmployeeDashboard userId={user.id} />
+  }
+
+  return <CompanyDashboard />
+}
+
+function EmployeeDashboard({ userId }: { userId: string }) {
+  const [stats, setStats] = useState<EmployeeStats | null>(null)
+  const [activities, setActivities] = useState<ActivityItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const supabase = createClient()
+
+  useEffect(() => {
+    async function fetchEmployeeData() {
+      try {
+        setLoading(true)
+        const today = new Date().toISOString().split('T')[0]
+        const startOfMonth = new Date()
+        startOfMonth.setDate(1)
+
+        // 1. Fetch Employee ID
+        const profileResponse = await supabase
+          .from('profiles')
+          .select('employee_id')
+          .eq('id', userId)
+          .single()
+
+        const profileData = profileResponse.data as { employee_id: string | null } | null
+
+        if (!profileData?.employee_id) {
+          console.error('Employee ID not found for user:', userId)
+          setLoading(false)
+          return
+        }
+
+        // 2. Fetch Attendance (Current Month)
+        const { data: attendanceData } = await supabase
+          .from('attendance')
+          .select('status, hours_worked, date')
+          .eq('employee_id', profileData.employee_id)
+          .gte('date', startOfMonth.toISOString())
+        
+        const attendance = attendanceData as { status: string; hours_worked: number; date: string }[] | null
+
+        const totalDays = attendance?.length || 0
+        const presentDays = attendance?.filter(a => a.status === 'present').length || 0
+        const lateDays = attendance?.filter(a => a.status === 'late').length || 0
+        const hoursWorked = attendance?.reduce((sum, a) => sum + (a.hours_worked || 0), 0) || 0
+        
+        // 2. Fetch Leave Balance (Mock or Real)
+        // For now preventing error if table doesn't have balance column
+        // We'll assume a standard 21 days for now or fetch from employee record if available
+        const leaveBalance = 21 // Placeholder or fetch from employee.leave_balance
+
+        setStats({
+          attendanceRate: totalDays ? Math.round((presentDays / totalDays) * 100) : 100,
+          leaveBalance,
+          hoursWorked,
+          lateDays
+        })
+
+        // 3. Recent Activity (My Attendance/Leave)
+         const recentActivities: ActivityItem[] = []
+         
+         // Add recent attendance
+         attendance?.slice(0, 3).forEach(a => {
+           recentActivities.push({
+             title: 'Attendance Logged',
+             description: `Marked as ${a.status} (${a.hours_worked || 0}h)`,
+             time: new Date(a.date).toLocaleDateString()
+           })
+         })
+
+         setActivities(recentActivities)
+
+      } catch (error) {
+        console.error('Employee Dashboard Error:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (userId) fetchEmployeeData()
+  }, [userId])
+
+  if (loading) return <DashboardSkeleton />
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">My Dashboard</h1>
+        <p className="text-slate-600">Welcome back! Here is your personal overview.</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Attendance Rate"
+          value={`${stats?.attendanceRate || 0}%`}
+          icon={<Clock className="h-5 w-5" />}
+          subtitle="this month"
+          trendUp={true}
+        />
+        <StatCard
+          title="Hours Worked"
+          value={`${stats?.hoursWorked.toFixed(1) || 0}h`}
+          icon={<Briefcase className="h-5 w-5" />}
+          subtitle="this month"
+          trendUp={true}
+        />
+         <StatCard
+          title="Leave Balance"
+          value={`${stats?.leaveBalance || 0}`}
+          icon={<Calendar className="h-5 w-5" />}
+          subtitle="days remaining"
+        />
+        <StatCard
+          title="Late Arrivals"
+          value={`${stats?.lateDays || 0}`}
+          icon={<TrendingDown className="h-5 w-5" />}
+          subtitle="this month"
+          trendUp={false}
+          trend={stats?.lateDays === 0 ? 'Good' : 'Needs Improve'}
+        />
+      </div>
+
+      <Card className="border-slate-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-slate-900">My Recent Activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {activities.length > 0 ? (
+              <div className="space-y-4">
+                {activities.map((activity, index) => (
+                  <ActivityItem 
+                    key={index}
+                    title={activity.title}
+                    description={activity.description}
+                    time={activity.time}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-sm text-center py-4">No recent activity</p>
+            )}
+          </CardContent>
+        </Card>
+    </div>
+  )
+}
+
+function CompanyDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [departments, setDepartments] = useState<DepartmentData[]>([])
@@ -184,16 +355,7 @@ export default function DashboardPage() {
     return date.toLocaleDateString()
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-12 w-64" />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
-        </div>
-      </div>
-    )
-  }
+  if (loading) return <DashboardSkeleton />
 
   return (
     <div className="space-y-8">
@@ -290,6 +452,17 @@ export default function DashboardPage() {
   )
 }
 
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-12 w-64" />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
+      </div>
+    </div>
+  )
+}
+
 interface StatCardProps {
   title: string
   value: string
@@ -312,16 +485,20 @@ function StatCard({ title, value, icon, trend, trendUp, subtitle }: StatCardProp
             {icon}
           </div>
         </div>
-        {trend && (
+        {(trend || subtitle) && (
           <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100">
-            {trendUp ? (
-              <TrendingUp className="h-4 w-4 text-emerald-600" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-amber-600" />
+            {trend && (
+              <>
+              {trendUp !== undefined && (trendUp ? (
+                <TrendingUp className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <TrendingDown className="h-4 w-4 text-amber-600" />
+              ))}
+              <span className={`text-sm font-semibold ${trendUp ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {trend}
+              </span>
+              </>
             )}
-            <span className={`text-sm font-semibold ${trendUp ? 'text-emerald-600' : 'text-amber-600'}`}>
-              {trend}
-            </span>
             {subtitle && <span className="text-sm text-slate-500">{subtitle}</span>}
           </div>
         )}

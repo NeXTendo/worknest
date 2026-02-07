@@ -40,13 +40,8 @@ export async function insertRecord<T extends TableName>(
 
     // Terminal Logging Proxy in Development
     if (process.env.NODE_ENV === 'development') {
-      const resp = await fetch('/api/debug/rpc', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fn: 'insert_record', params: { p_table_name: tableName, p_data: data } })
-      })
-      const result = await resp.json()
-      return { data: result.data, error: result.error }
+      // Just log directly
+      console.log(`[RPC Debug] Insert ${tableName}:`, data)
     }
 
     const { data: recordId, error } = await supabase.rpc('insert_record', {
@@ -103,13 +98,8 @@ export async function updateRecord<T extends TableName>(
 
     // Terminal Logging Proxy in Development
     if (process.env.NODE_ENV === 'development') {
-      const resp = await fetch('/api/debug/rpc', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fn: 'update_record', params: { p_table_name: tableName, p_record_id: recordId, p_updates: updates } })
-      })
-      const result = await resp.json()
-      return { data: result.data, error: result.error }
+      // Just log directly
+      console.log(`[RPC Debug] Update ${tableName} (${recordId}):`, updates)
     }
 
     const { data, error } = await supabase.rpc('update_record', {
@@ -155,13 +145,8 @@ export async function deleteRecord(
   try {
     // Terminal Logging Proxy in Development
     if (process.env.NODE_ENV === 'development') {
-      const resp = await fetch('/api/debug/rpc', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fn: 'delete_record', params: { p_table_name: tableName, p_id: recordId } })
-      })
-      const result = await resp.json()
-      return { error: result.error }
+        // Just log directly
+        console.log(`[RPC Debug] Delete ${tableName} (${recordId})`)
     }
 
     const { error } = await supabase.rpc('delete_record', {
