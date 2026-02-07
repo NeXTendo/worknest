@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -33,7 +34,7 @@ interface NavItem {
 const navigation: NavItem[] = [
   {
     title: 'Dashboard',
-    href: '/dashboard',
+    href: '/dashboard/dashboard',
     icon: LayoutDashboard,
     roles: ['super_admin', 'main_admin', 'hr_admin', 'manager', 'employee'],
   },
@@ -74,6 +75,12 @@ const navigation: NavItem[] = [
     roles: ['super_admin', 'main_admin', 'hr_admin', 'manager', 'employee'],
   },
   {
+    title: 'Companies',
+    href: '/dashboard/companies',
+    icon: Building2,
+    roles: ['super_admin'],
+  },
+  {
     title: 'Users',
     href: '/dashboard/users',
     icon: UserCog,
@@ -111,28 +118,24 @@ export function AppSidebar() {
       )}
     >
       {/* Logo & Company */}
-      <div className="flex h-16 items-center justify-between px-4 border-b border-white/10">
+      <div className="flex h-16 items-center justify-between px-4 border-b border-white/10 brand-border-alpha">
         <div className={cn('flex items-center gap-3', !sidebarOpen && 'justify-center')}>
           {company?.logo_url ? (
-            <Avatar className="h-10 w-10">
-              <AvatarImage src={company.logo_url} alt={company.name} />
-              <AvatarFallback className="text-white font-bold" style={{ backgroundColor: company.primary_color }}>
-                {company.name.slice(0, 2)}
-              </AvatarFallback>
-            </Avatar>
+            <div className="h-10 w-10 relative overflow-hidden flex-shrink-0">
+              <Image src={company.logo_url} alt={company.name} fill className="object-contain" />
+            </div>
           ) : (
             <div 
-              className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold"
-              style={{ backgroundColor: company?.primary_color || '#14B8A6' }}
+              className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold brand-bg"
               title="Company Logo"
             >
-              WN
+              {company?.name?.[0] || 'W'}
             </div>
           )}
           {sidebarOpen && (
-            <div className="flex flex-col">
-              <span className="font-bold text-sm">{company?.name || 'WorkNest'}</span>
-              <span className="text-xs text-white/60 capitalize">{user?.role?.replace('_', ' ')}</span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-sm truncate">{company?.name || 'WorkNest'}</span>
+              <span className="text-[10px] text-white/50 uppercase tracking-wider">{user?.role?.replace('_', ' ')}</span>
             </div>
           )}
         </div>
@@ -140,14 +143,14 @@ export function AppSidebar() {
           variant="ghost"
           size="icon"
           onClick={toggleSidebar}
-          className="text-white hover:bg-white/10"
+          className="text-white hover:bg-white/10 hidden lg:flex"
         >
           <ChevronLeft className={cn('h-5 w-5 transition-transform', !sidebarOpen && 'rotate-180')} />
         </Button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+      <nav className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-hide">
         {filteredNav.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
@@ -155,30 +158,33 @@ export function AppSidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
+                'flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all group',
                 isActive
-                  ? 'bg-worknest-teal text-white'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white',
+                  ? 'text-white shadow-lg brand-bg'
+                  : 'text-white/60 hover:bg-white/5 hover:text-white',
                 !sidebarOpen && 'justify-center'
               )}
             >
-              <item.icon className="h-5 w-5 flex-shrink-0" />
-              {sidebarOpen && <span>{item.title}</span>}
+              <item.icon className={cn("h-5 w-5 flex-shrink-0 transition-transform group-hover:scale-110", isActive ? "text-white" : "text-white/60 group-hover:text-white")} />
+              {sidebarOpen && <span className="truncate">{item.title}</span>}
+              {!sidebarOpen && isActive && (
+                <div className="absolute left-0 w-1 h-6 bg-white rounded-r-full" />
+              )}
             </Link>
           )
         })}
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-white/10 p-4">
-        <div className={cn('text-xs text-white/50', !sidebarOpen && 'text-center')}>
+      <div className="border-t border-white/10 p-4 brand-border-alpha">
+        <div className={cn('text-[10px] text-white/40', !sidebarOpen && 'text-center')}>
           {sidebarOpen ? (
-            <>
-              <p>Powered by <span className="text-worknest-teal font-medium">TechOhns</span></p>
-              <p className="mt-1">© 2024 All rights reserved</p>
-            </>
+            <div className="flex flex-col gap-1">
+              <p>Powered by <span className="font-semibold brand-text">TechOhns</span></p>
+              <p>© 2024 WorkNest</p>
+            </div>
           ) : (
-            <p>TechOhns</p>
+            <p className="font-bold brand-text">TO</p>
           )}
         </div>
       </div>

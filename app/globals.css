@@ -14,6 +14,11 @@
     --popover-foreground: 222.2 84% 4.9%;
     --primary: 172.5 82.4% 40.4%; /* Teal #14B8A6 */
     --primary-foreground: 0 0% 100%;
+    
+    /* Branding Variables */
+    --brand-primary: #14B8A6;
+    --brand-secondary: #0F172A;
+    --brand-accent: #F59E0B;
     --secondary: 215.4 100% 10%; /* Navy #0F172A */
     --secondary-foreground: 0 0% 100%;
     --muted: 210 40% 96.1%;
@@ -133,6 +138,17 @@
   /* Card hover effect */
   .card-hover {
     @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-1;
+  }
+
+  /* Brand Utilities */
+  .brand-bg {
+    background-color: var(--brand-primary);
+  }
+  .brand-text {
+    color: var(--brand-primary);
+  }
+  .brand-border-alpha {
+    border-color: rgba(20, 184, 166, 0.26); /* #14B8A6 with ~26% opacity */
   }
 }
 

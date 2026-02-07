@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, Search, User, LogOut } from 'lucide-react'
+import { Bell, Search, User, LogOut, Settings, Menu } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useCompanyStore } from '@/store/useCompanyStore'
 import { useUIStore } from '@/store/useUIStore'
@@ -22,104 +22,101 @@ import { useRouter } from 'next/navigation'
 export function AppHeader() {
   const { user, logout } = useAuthStore()
   const { company } = useCompanyStore()
-  const { sidebarOpen } = useUIStore()
+  const { sidebarOpen, toggleSidebar } = useUIStore()
   const router = useRouter()
   const supabase = createClient()
 
   const handleLogout = async () => {
-  try {
-    const res = await fetch('/api/logout', { method: 'POST' })
-    const data = await res.json()
+    try {
+      const res = await fetch('/api/logout', { method: 'POST' })
+      const data = await res.json()
 
-    if (data.success) {
-      // Reset browser singleton
-      import('@/lib/supabase/client').then(mod => mod.resetBrowserClient())
-
-      // Clear auth store
-      await supabase.auth.signOut()
-      logout()
-
-      // Redirect to login page
-      router.push('/auth/login')
-    } else {
-      console.error('Logout failed', data.error)
+      if (data.success) {
+        import('@/lib/supabase/client').then(mod => mod.resetBrowserClient())
+        await supabase.auth.signOut()
+        logout()
+        router.push('/auth/login')
+      }
+    } catch (error) {
+      console.error('Logout error:', error)
     }
-  } catch (error) {
-    console.error('Logout exception', error)
   }
-}
-
 
   const getInitials = () => {
     if (user?.first_name && user?.last_name) {
       return `${user.first_name[0]}${user.last_name[0]}`
     }
-    return 'WN'
+    return user?.email?.[0].toUpperCase() || 'W'
   }
 
   return (
-    <header
-      className={cn(
-        'sticky-header flex h-16 items-center justify-between border-b px-6 transition-all duration-300',
-        sidebarOpen ? 'ml-64' : 'ml-20'
-      )}
-    >
-      {/* Search */}
-      <div className="flex-1 max-w-md">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-white/80 backdrop-blur-md px-4 md:px-6">
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleSidebar}
+          className="lg:hidden"
+        >
+          <Menu className="h-5 w-5 text-gray-600" />
+        </Button>
+        <div className="hidden md:flex relative max-w-md w-64 lg:w-96">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input
             type="search"
-            placeholder="Search employees, departments..."
-            className="pl-9"
+            placeholder="Search..."
+            className="pl-9 bg-gray-50 border-none focus-visible:ring-1 focus-visible:ring-worknest-teal"
           />
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-4">
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
+      <div className="flex items-center gap-2 md:gap-4">
+        <Button variant="ghost" size="icon" className="relative text-gray-500 hover:text-gray-900">
           <Bell className="h-5 w-5" />
-          <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-worknest-rose" />
+          <span 
+            className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full border-2 border-white" 
+            style={{ backgroundColor: 'var(--brand-accent)' }} 
+          />
         </Button>
 
-        {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={user?.avatar_url} alt={user?.first_name || 'User'} />
-                <AvatarFallback style={{ backgroundColor: company?.primary_color }}>
+            <Button variant="ghost" className="relative h-10 w-10 md:h-11 md:w-11 rounded-full p-0 overflow-hidden ring-offset-2 hover:ring-2 transition-all" style={{ '--tw-ring-color': 'var(--brand-primary)' } as any}>
+              <Avatar className="h-full w-full">
+                <AvatarImage src={user?.avatar_url} alt={user?.first_name || 'User'} className="object-cover" />
+                <AvatarFallback className="text-white font-bold text-sm" style={{ backgroundColor: 'var(--brand-primary)' }}>
                   {getInitials()}
                 </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>
+          <DropdownMenuContent align="end" className="w-64 p-2 shadow-xl border-none rounded-xl">
+            <DropdownMenuLabel className="p-3">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">
+                <p className="text-sm font-bold text-gray-900">
                   {user?.first_name} {user?.last_name}
                 </p>
-                <p className="text-xs text-muted-foreground">{user?.email}</p>
-                <p className="text-xs text-worknest-teal capitalize">
+                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                <div 
+                  className="mt-2 w-fit px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-white"
+                  style={{ backgroundColor: 'var(--brand-primary)' }}
+                >
                   {user?.role?.replace('_', ' ')}
-                </p>
+                </div>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push('/dashboard/profile')}>
-              <User className="mr-2 h-4 w-4" />
+            <DropdownMenuSeparator className="my-2" />
+            <DropdownMenuItem onClick={() => router.push('/dashboard/profile')} className="rounded-lg cursor-pointer">
+              <User className="mr-3 h-4 w-4 text-gray-500" />
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
-              <User className="mr-2 h-4 w-4" />
+            <DropdownMenuItem onClick={() => router.push('/dashboard/settings')} className="rounded-lg cursor-pointer">
+              <Settings className="mr-3 h-4 w-4 text-gray-500" />
               Settings
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="text-destructive">
-              <LogOut className="mr-2 h-4 w-4" />
+            <DropdownMenuSeparator className="my-2" />
+            <DropdownMenuItem onClick={handleLogout} className="rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 cursor-pointer">
+              <LogOut className="mr-3 h-4 w-4" />
               Logout
             </DropdownMenuItem>
           </DropdownMenuContent>

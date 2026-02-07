@@ -20,11 +20,6 @@ interface Department {
   name: string
 }
 
-interface JobTitle {
-  id: string
-  title: string
-}
-
 interface EmployeeFormData {
   first_name: string
   last_name: string
@@ -38,7 +33,7 @@ interface EmployeeFormData {
   employment_status: string
   hire_date: string
   department_id: string
-  job_title_id: string
+  job_title: string
   base_salary: string
   address_line_1: string
   city: string
@@ -53,7 +48,6 @@ interface EmployeeFormData {
 export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormProps) {
   const [loading, setLoading] = useState(false)
   const [departments, setDepartments] = useState<Department[]>([])
-  const [jobTitles, setJobTitles] = useState<JobTitle[]>([])
   const [formData, setFormData] = useState<EmployeeFormData>({
     // Personal
     first_name: '',
@@ -70,7 +64,7 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
     employment_status: 'active',
     hire_date: new Date().toISOString().split('T')[0],
     department_id: '',
-    job_title_id: '',
+    job_title: '',
     base_salary: '',
     
     // Address
@@ -100,13 +94,11 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
 
   async function fetchMetadata() {
     try {
-      const [deptRes, jobsRes] = await Promise.all([
+      const [deptRes] = await Promise.all([
         supabase.from('departments').select('id, name').eq('is_active', true).order('name'),
-        supabase.from('job_titles').select('id, title').eq('is_active', true).order('title')
       ])
 
       if (deptRes.data) setDepartments(deptRes.data)
-      if (jobsRes.data) setJobTitles(jobsRes.data)
     } catch (error) {
       console.error('Error fetching metadata:', error)
     }
@@ -139,7 +131,7 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
           employment_status: emp.employment_status || 'active',
           hire_date: emp.hire_date || '',
           department_id: emp.department_id || '',
-          job_title_id: emp.job_title_id || '',
+          job_title: emp.job_title || '',
           base_salary: emp.base_salary?.toString() || '',
           address_line_1: emp.address_line_1 || '',
           city: emp.city || 'Lusaka',
@@ -166,14 +158,25 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
+  const sanitizeData = (data: any) => {
+    const sanitized = { ...data }
+    Object.keys(sanitized).forEach((key) => {
+      if (sanitized[key] === '') {
+        sanitized[key] = null
+      }
+    })
+    return sanitized
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
+      const sanitizedData = sanitizeData(formData)
       const payload: any = {
-        ...formData,
-        base_salary: formData.base_salary ? parseFloat(formData.base_salary) : null
+        ...sanitizedData,
+        base_salary: sanitizedData.base_salary ? parseFloat(sanitizedData.base_salary.toString()) : null
       }
 
       let error
@@ -344,17 +347,13 @@ export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormPr
               </Select>
             </div>
             <div>
-              <Label htmlFor="job_title_id">Job Title</Label>
-              <Select value={formData.job_title_id} onValueChange={(v) => handleChange('job_title_id', v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select job title" />
-                </SelectTrigger>
-                <SelectContent>
-                  {jobTitles.map((job) => (
-                    <SelectItem key={job.id} value={job.id}>{job.title}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="job_title">Job Title</Label>
+              <Input
+                id="job_title"
+                value={formData.job_title}
+                onChange={(e) => handleChange('job_title', e.target.value)}
+                placeholder="e.g. Software Engineer, Account Manager"
+              />
             </div>
           </div>
         </TabsContent>

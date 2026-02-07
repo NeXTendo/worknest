@@ -3,311 +3,228 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { 
+  Building2, 
+  Users, 
+  ChevronLeft, 
+  Settings, 
+  DollarSign,
+  Briefcase,
+  ExternalLink
+} from 'lucide-react'
+import { DepartmentMembers } from '@/components/departments/department-members'
+import { formatCurrency } from '@/lib/utils'
+import { useDepartmentStore } from '@/store/useDepartmentStore'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { DepartmentForm } from '@/components/departments/department-form'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Building2, Users, DollarSign, Edit, Trash2 } from 'lucide-react'
-import Link from 'next/link'
-
-interface Department {
-  id: string
-  name: string
-  description: string | null
-  employee_count: number
-  budget: number | null
-  created_at: string
-}
-
-interface DepartmentEmployee {
-  id: string
-  employee_number: string
-  first_name: string
-  last_name: string
-  email: string
-  avatar_url: string | null
-  job_titles: { title: string } | null
-}
 
 export default function DepartmentDetailPage() {
-  const params = useParams()
+  const { id } = useParams()
   const router = useRouter()
-  const departmentId = params.id as string
-  const supabase = createClient()
-
-  const [department, setDepartment] = useState<Department | null>(null)
-  const [employees, setEmployees] = useState<DepartmentEmployee[]>([])
+  const [department, setDepartment] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const supabase = createClient()
+  const { fetchDepartments } = useDepartmentStore()
 
   useEffect(() => {
-    fetchDepartmentData()
-  }, [departmentId])
+    fetchDepartmentDetails()
+  }, [id])
 
-  async function fetchDepartmentData() {
+  async function fetchDepartmentDetails() {
     try {
       setLoading(true)
-      setError(null)
-
-      // Fetch department details
-      const { data: deptData, error: deptError } = await supabase
+      const { data, error } = await supabase
         .from('departments')
-        .select('*')
-        .eq('id', departmentId)
+        .select(`
+          *,
+          employees!manager_id (
+            first_name,
+            last_name,
+            avatar_url
+          )
+        `)
+        .eq('id', id)
         .single()
 
-      if (deptError) throw deptError
-      setDepartment(deptData)
-
-      // Fetch department employees
-      const { data: empData, error: empError } = await supabase
-        .from('employees')
-        .select('id, employee_number, first_name, last_name, email, avatar_url, job_titles(title)')
-        .eq('department_id', departmentId)
-        .order('first_name')
-
-      if (empError) throw empError
-      setEmployees(empData || [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load department')
+      if (error) throw error
+      setDepartment(data)
+    } catch (error) {
+      console.error('Error fetching department details:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleDelete() {
-    if (!confirm('Are you sure you want to delete this department?')) return
-
-    try {
-      const { error } = await supabase
-        .from('departments')
-        .delete()
-        .eq('id', departmentId)
-
-      if (error) throw error
-      router.push('/dashboard/departments')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete department')
-    }
+  const handleEditSuccess = () => {
+    setIsEditDialogOpen(false)
+    fetchDepartmentDetails()
+    fetchDepartments() // Refresh the store list if needed
   }
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-12 w-40" />
-        <div className="grid gap-4 md:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-32 w-full" />
-          ))}
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-10 w-10 rounded-xl" />
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-32" />
+          </div>
         </div>
-        <Skeleton className="h-80 w-full" />
+        <div className="grid gap-6 md:grid-cols-3">
+          <Skeleton className="h-[400px] col-span-2" />
+          <Skeleton className="h-[400px]" />
+        </div>
       </div>
     )
   }
 
-  if (error || !department) {
+  if (!department) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-2">
-          <Link
-            href="/dashboard/departments"
-            className="flex items-center gap-2 text-worknest-teal hover:text-worknest-teal/80"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Departments
-          </Link>
-        </div>
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <p className="text-red-700">{error || 'Department not found'}</p>
-          </CardContent>
-        </Card>
+      <div className="text-center py-20">
+        <h2 className="text-2xl font-bold">Department not found</h2>
+        <Button variant="link" onClick={() => router.back()}>Go back</Button>
       </div>
     )
   }
-
-  const budgetPerEmployee = department.employee_count > 0
-    ? (department.budget || 0) / department.employee_count
-    : 0
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-center gap-4">
+        <Button variant="outline" size="icon" onClick={() => router.back()} className="rounded-xl">
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
         <div>
-          <div className="flex items-center gap-2 mb-4">
-            <Link
-              href="/dashboard/departments"
-              className="flex items-center gap-2 text-worknest-teal hover:text-worknest-teal/80 transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Departments
-            </Link>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="h-16 w-16 rounded-lg bg-worknest-teal/10 flex items-center justify-center">
-              <Building2 className="h-8 w-8 text-worknest-teal" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold">{department.name}</h1>
-              {department.description && (
-                <p className="text-gray-600 mt-2">{department.description}</p>
-              )}
-            </div>
-          </div>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{department.name}</h1>
+          <p className="text-slate-600">Department Overview</p>
         </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Edit className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleDelete}
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete
+        <div className="ml-auto flex gap-2">
+          <Button onClick={() => setIsEditDialogOpen(true)} variant="outline" className="shadow-sm">
+            <Settings className="mr-2 h-4 w-4" /> Edit Details
           </Button>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Employees</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="text-3xl font-bold">{department.employee_count}</div>
-              <div className="h-12 w-12 rounded-lg bg-worknest-teal/10 flex items-center justify-center">
-                <Users className="h-6 w-6 text-worknest-teal" />
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Main Content */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="border-slate-200 shadow-sm overflow-hidden">
+            <div className="h-32 bg-gradient-to-r from-worknest-teal/20 to-teal-500/20" />
+            <CardContent className="relative pt-0">
+              <div className="absolute -top-12 left-6 h-24 w-24 rounded-2xl bg-white p-2 shadow-lg">
+                <div className="h-full w-full rounded-xl bg-worknest-teal/10 flex items-center justify-center">
+                  <Building2 className="h-12 w-12 text-worknest-teal" />
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="pt-16 pb-6">
+                <h2 className="text-xl font-bold text-slate-900 mb-2">About {department.name}</h2>
+                <p className="text-slate-600 leading-relaxed">
+                  {department.description || 'No description provided for this department.'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Budget</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="text-3xl font-bold">
-                ${(department.budget || 0).toLocaleString()}
-              </div>
-              <div className="h-12 w-12 rounded-lg bg-worknest-emerald/10 flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-worknest-emerald" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Department Members</CardTitle>
+              <Badge variant="outline" className="text-worknest-teal border-worknest-teal/20">
+                {department.employee_count} total
+              </Badge>
+            </CardHeader>
+            <CardContent>
+              <DepartmentMembers departmentId={department.id} />
+            </CardContent>
+          </Card>
+        </div>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">Budget per Employee</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="text-3xl font-bold">
-                ${budgetPerEmployee.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+        {/* Sidebar Info */}
+        <div className="space-y-6">
+          <Card className="border-slate-200 shadow-sm bg-slate-50/50">
+            <CardHeader>
+              <CardTitle className="text-sm uppercase tracking-wider text-slate-500">Department Stats</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
+                  <DollarSign className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Annual Budget</p>
+                  <p className="text-lg font-bold text-slate-900">
+                    {department.budget ? formatCurrency(department.budget) : 'Not set'}
+                  </p>
+                </div>
               </div>
-              <div className="h-12 w-12 rounded-lg bg-worknest-amber/10 flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-worknest-amber" />
+
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+                  <Briefcase className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Department Manager</p>
+                  {department.employees ? (
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="font-bold text-slate-900">
+                        {department.employees.first_name} {department.employees.last_name}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 text-sm">No manager assigned</p>
+                  )}
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600">
+                  <Users className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Team Size</p>
+                  <p className="text-lg font-bold text-slate-900">{department.employee_count} Employees</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-sm uppercase tracking-wider text-slate-500">Quick Links</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button variant="ghost" className="w-full justify-start text-slate-600 hover:text-worknest-teal" size="sm">
+                <ExternalLink className="mr-2 h-4 w-4" /> View Analytics
+              </Button>
+              <Button variant="ghost" className="w-full justify-start text-slate-600 hover:text-worknest-teal" size="sm">
+                <ExternalLink className="mr-2 h-4 w-4" /> Export Member List
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Department Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Department Information</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-6 md:grid-cols-2">
-            <div>
-              <label className="text-sm font-medium text-gray-600">Department Name</label>
-              <p className="text-lg mt-2">{department.name}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600">Created</label>
-              <p className="text-lg mt-2">
-                {new Date(department.created_at).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </p>
-            </div>
-          </div>
-          {department.description && (
-            <div>
-              <label className="text-sm font-medium text-gray-600">Description</label>
-              <p className="text-gray-700 mt-2 whitespace-pre-wrap">{department.description}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Employees */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Department Employees</CardTitle>
-          <CardDescription>{employees.length} employees</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {employees.length === 0 ? (
-            <div className="text-center py-8">
-              <Users className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">No employees in this department</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">
-                      Employee
-                    </th>
-                    <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">
-                      Email
-                    </th>
-                    <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">
-                      Job Title
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employees.map((emp) => (
-                    <tr key={emp.id} className="border-b hover:bg-gray-50 transition-colors">
-                      <td className="py-3 px-4">
-                        <Link
-                          href={`/dashboard/employees/${emp.id}`}
-                          className="font-medium text-worknest-teal hover:text-worknest-teal/80 transition-colors"
-                        >
-                          {emp.first_name} {emp.last_name}
-                          <span className="text-xs text-gray-500 ml-2">({emp.employee_number})</span>
-                        </Link>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-gray-600">{emp.email}</td>
-                      <td className="py-3 px-4">
-                        <Badge variant="outline" className="bg-worknest-teal/5">
-                          {emp.job_titles?.title || 'N/A'}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit {department.name}</DialogTitle>
+          </DialogHeader>
+          <DepartmentForm 
+            departmentId={department.id}
+            onSuccess={handleEditSuccess}
+            onCancel={() => setIsEditDialogOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

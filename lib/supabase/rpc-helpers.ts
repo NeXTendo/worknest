@@ -33,16 +33,33 @@ export async function insertRecord<T extends TableName>(
   data: Database['public']['Tables'][T]['Insert']
 ): Promise<{ data: string | null; error: any }> {
   try {
+    if (!data || Object.keys(data).length === 0) {
+      console.warn(`[RPC] Skipping insert for ${tableName}: no data provided`)
+      return { data: null, error: new Error('No data provided for insertion') }
+    }
+
+    // Terminal Logging Proxy in Development
+    if (process.env.NODE_ENV === 'development') {
+      const resp = await fetch('/api/debug/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fn: 'insert_record', params: { p_table_name: tableName, p_data: data } })
+      })
+      const result = await resp.json()
+      return { data: result.data, error: result.error }
+    }
+
     const { data: recordId, error } = await supabase.rpc('insert_record', {
       p_table_name: tableName,
       p_data: data as any,
     } as any)
 
     if (error) {
-      console.error(`Error inserting into ${tableName}:`, error)
+      console.error(`[RPC] Error inserting into ${tableName}:`, error)
       return { data: null, error }
     }
 
+    console.log(`[RPC] Successfully inserted into ${tableName}, ID:`, recordId)
     return { data: recordId, error: null }
   } catch (error) {
     console.error(`Exception inserting into ${tableName}:`, error)
@@ -79,6 +96,22 @@ export async function updateRecord<T extends TableName>(
   updates: Partial<Database['public']['Tables'][T]['Update']>
 ): Promise<{ data: string | null; error: any }> {
   try {
+    if (!updates || Object.keys(updates).length === 0) {
+      console.warn(`[RPC] Skipping update for ${tableName}: no data provided`)
+      return { data: recordId, error: null }
+    }
+
+    // Terminal Logging Proxy in Development
+    if (process.env.NODE_ENV === 'development') {
+      const resp = await fetch('/api/debug/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fn: 'update_record', params: { p_table_name: tableName, p_record_id: recordId, p_updates: updates } })
+      })
+      const result = await resp.json()
+      return { data: result.data, error: result.error }
+    }
+
     const { data, error } = await supabase.rpc('update_record', {
       p_table_name: tableName,
       p_record_id: recordId,
@@ -120,6 +153,17 @@ export async function deleteRecord(
   recordId: string
 ): Promise<{ error: any }> {
   try {
+    // Terminal Logging Proxy in Development
+    if (process.env.NODE_ENV === 'development') {
+      const resp = await fetch('/api/debug/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fn: 'delete_record', params: { p_table_name: tableName, p_id: recordId } })
+      })
+      const result = await resp.json()
+      return { error: result.error }
+    }
+
     const { error } = await supabase.rpc('delete_record', {
       p_table_name: tableName,
       p_id: recordId,
@@ -175,6 +219,11 @@ export async function fetchRecords<T extends TableName>(
   count?: number
 }> {
   try {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`\n\x1b[35m[DEBUG FETCH]\x1b[0m ${tableName}`)
+      if (options) console.dir(options, { depth: null })
+    }
+
     let query = supabase
       .from(tableName)
       .select(options?.select || '*', { count: 'exact' })

@@ -7,20 +7,54 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE OR REPLACE FUNCTION public.jwt_company_id()
 RETURNS uuid
-LANGUAGE sql STABLE AS $$
-  SELECT NULLIF(current_setting('request.jwt.claims', true)::json->>'company_id', '')::uuid;
-$$;
+LANGUAGE plpgsql STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _company_id uuid;
+BEGIN
+  -- 1. Try JWT claim
+  _company_id := (auth.jwt() ->> 'company_id')::uuid;
+  IF _company_id IS NOT NULL THEN
+    RETURN _company_id;
+  END IF;
 
-CREATE OR REPLACE FUNCTION public.jwt_role()
-RETURNS text
-LANGUAGE sql STABLE AS $$
-  SELECT NULLIF(current_setting('request.jwt.claims', true)::json->>'role', '')::text;
+  -- 2. Fallback to profiles table (bypass RLS via SECURITY DEFINER)
+  SELECT company_id INTO _company_id FROM public.profiles WHERE id = auth.uid();
+  RETURN _company_id;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NULL;
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.jwt_user_id()
 RETURNS uuid
 LANGUAGE sql STABLE AS $$
   SELECT auth.uid();
+$$;
+
+CREATE OR REPLACE FUNCTION public.jwt_role()
+RETURNS text
+LANGUAGE plpgsql STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _role text;
+BEGIN
+  -- 1. Try JWT claim
+  _role := auth.jwt() ->> 'role';
+  IF _role IS NOT NULL AND _role <> 'authenticated' AND _role <> '' THEN
+    RETURN _role;
+  END IF;
+
+  -- 2. Fallback to profiles table (bypass RLS via SECURITY DEFINER)
+  SELECT role::text INTO _role FROM public.profiles WHERE id = auth.uid();
+  RETURN COALESCE(_role, 'authenticated');
+EXCEPTION WHEN OTHERS THEN
+  RETURN 'authenticated';
+END;
 $$;
 
 -- =====================================================
@@ -453,11 +487,14 @@ FOR UPDATE USING (
 -- =====================================================
 
 CREATE POLICY profiles_super_admin ON public.profiles
-FOR ALL USING (jwt_role() = 'super_admin');
+FOR ALL USING (
+  -- Use a subquery directly to avoid calling the recursive jwt_role() function
+  (SELECT role::text FROM public.profiles WHERE id = auth.uid()) = 'super_admin'
+);
 
 CREATE POLICY profiles_view ON public.profiles
 FOR SELECT USING (
-  id = jwt_user_id()
+  id = auth.uid()
   OR (company_id = jwt_company_id()
       AND jwt_role() IN ('main_admin','hr_admin','manager'))
 );
@@ -562,7 +599,7 @@ CREATE OR REPLACE FUNCTION public.set_company_id()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.company_id IS NULL THEN
-    NEW.company_id := jwt_company_id();
+    NEW.company_id := public.jwt_company_id();
   END IF;
   RETURN NEW;
 END;
@@ -587,4 +624,7 @@ CREATE TRIGGER trg_attendance_company BEFORE INSERT ON public.attendance FOR EAC
 CREATE TRIGGER trg_leave_company BEFORE INSERT ON public.leave_requests FOR EACH ROW EXECUTE FUNCTION set_company_id();
 CREATE TRIGGER trg_payroll_company BEFORE INSERT ON public.payroll FOR EACH ROW EXECUTE FUNCTION set_company_id();
 CREATE TRIGGER trg_announcements_company BEFORE INSERT ON public.announcements FOR EACH ROW EXECUTE FUNCTION set_company_id();
+CREATE TRIGGER trg_profiles_company BEFORE INSERT ON public.profiles FOR EACH ROW EXECUTE FUNCTION set_company_id();
+CREATE TRIGGER trg_qr_codes_company BEFORE INSERT ON public.qr_codes FOR EACH ROW EXECUTE FUNCTION set_company_id();
+CREATE TRIGGER trg_audit_logs_company BEFORE INSERT ON public.audit_logs FOR EACH ROW EXECUTE FUNCTION set_company_id();
 

@@ -1,224 +1,144 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { 
-  LayoutDashboard,
-  Users, 
-  Clock, 
-  DollarSign, 
-  Calendar,
-  Building2,
-  Megaphone,
-  Settings,
-  Info,
-  Menu,
-  X,
-  LogOut,
-  User
-} from 'lucide-react'
-import Link from 'next/link'
-import Image from 'next/image'
+import { AppSidebar } from '@/components/layout/app-sidebar'
+import { AppHeader } from '@/components/layout/app-header'
+import { useAuthStore } from '@/store/useAuthStore'
+import { useCompanyStore } from '@/store/useCompanyStore'
+import { useUIStore } from '@/store/useUIStore'
+import { cn } from '@/lib/utils'
 
-interface Profile {
-  id: string
-  role: string
-  first_name: string | null
-  last_name: string | null
-  email: string
-  avatar_url: string | null
+interface ProfileWithEmployee {
+  id: string;
+  role: string;
+  company_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+  employees: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    avatar_url: string | null;
+  } | null;
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const { setUser } = useAuthStore()
+  const { setCompany, company } = useCompanyStore()
+  const { sidebarOpen } = useUIStore()
   const router = useRouter()
-  const pathname = usePathname()
   const supabase = createClient()
 
   useEffect(() => {
-    loadProfile()
+    initializeDashboard()
   }, [])
 
-  async function loadProfile() {
+  async function initializeDashboard() {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      setLoading(true)
       
-      if (!user) {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session) {
         router.push('/auth/login')
         return
       }
 
-      const { data, error } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id, role, first_name, last_name, email, avatar_url')
-        .eq('id', user.id)
+        .select(`
+          id,
+          role,
+          company_id,
+          first_name,
+          last_name,
+          avatar_url,
+          employees (
+            id,
+            first_name,
+            last_name,
+            avatar_url
+          )
+        `)
+        .eq('id', session.user.id)
         .single()
 
-      if (error) throw error
-      setProfile(data)
+      if (profileError || !profileData) {
+        console.error('Profile load error:', profileError)
+        router.push('/auth/login')
+        return
+      }
+
+      const profile = profileData as unknown as ProfileWithEmployee
+
+      setUser({
+        id: profile.id,
+        email: session.user.email!,
+        role: profile.role as any,
+        company_id: profile.company_id,
+        employee_id: profile.employees?.id,
+        first_name: profile.employees?.first_name || profile.first_name || '',
+        last_name: profile.employees?.last_name || profile.last_name || '',
+        avatar_url: profile.employees?.avatar_url || profile.avatar_url || '',
+      })
+
+      if (profile.company_id) {
+        const { data: companyData, error: companyError } = await supabase
+          .from('companies')
+          .select('*')
+          .eq('id', profile.company_id)
+          .single()
+
+        if (companyData && !companyError) {
+          setCompany(companyData)
+        }
+      }
+
     } catch (error) {
-      console.error('Profile load error:', error)
+      console.error('Initialization error:', error)
       router.push('/auth/login')
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    router.push('/auth/login')
-    router.refresh()
-  }
-
-  const navigation = [
-    { name: 'Dashboard', href: '/dashboard/dashboard', icon: LayoutDashboard },
-    { name: 'Employees', href: '/dashboard/employees', icon: Users },
-    { name: 'Departments', href: '/dashboard/departments', icon: Building2 },
-    { name: 'Attendance', href: '/dashboard/attendance', icon: Clock },
-    { name: 'Payroll', href: '/dashboard/payroll', icon: DollarSign },
-    { name: 'Leave', href: '/dashboard/leave', icon: Calendar },
-    { name: 'Announcements', href: '/dashboard/announcements', icon: Megaphone },
-    { name: 'Users', href: '/dashboard/users', icon: User },
-    { name: 'Settings', href: '/dashboard/settings', icon: Settings },
-    { name: 'About', href: '/dashboard/about', icon: Info },
-  ]
+  useEffect(() => {
+    if (company) {
+      const root = document.documentElement
+      if (company.primary_color) {
+        root.style.setProperty('--brand-primary', company.primary_color)
+        root.style.setProperty('--brand-secondary', company.secondary_color || '#0F172A')
+        root.style.setProperty('--brand-accent', company.accent_color || '#14B8A6')
+      }
+    }
+  }, [company])
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
+      <div className="flex h-screen items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-worknest-teal"></div>
+          <p className="text-gray-500 animate-pulse font-medium">WorkNest is preparing your workspace...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex h-screen bg-slate-50">
-      {/* Mobile sidebar backdrop */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 transform transition-transform duration-300 ease-in-out
-        lg:translate-x-0 lg:static lg:z-auto
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <div className="flex h-full flex-col">
-         {/* Logo */}
-<div className="flex h-16 items-center justify-between px-6 border-b border-slate-800">
-  <Link href="/dashboard/dashboard" className="flex items-center gap-2">
-    <div className="-ml-2"> {/* Moves logo slightly left */}
-      <Image
-        src="/worknest-logo.png"   // your logo path
-        alt="WorkNest Logo"
-        width={48}           // slightly larger
-        height={48}          // slightly larger
-        className="object-contain"
-      />
-    </div>
-    <span className="text-white font-semibold text-xl">WorkNest</span>
-  </Link>
-  <button 
-    onClick={() => setSidebarOpen(false)}
-    className="lg:hidden text-gray-400 hover:text-white"
-    aria-label="Close sidebar"
-  >
-    <X className="h-6 w-6" />
-  </button>
-</div>
-
-          {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-            {navigation.map((item) => {
-              const Icon = item.icon
-              const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-              
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`
-                    flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
-                    ${isActive 
-                      ? 'bg-worknest-teal text-white shadow-lg shadow-worknest-teal/20' 
-                      : 'text-gray-300 hover:bg-slate-800 hover:text-white'
-                    }
-                  `}
-                >
-                  <Icon className="h-5 w-5 flex-shrink-0" />
-                  <span>{item.name}</span>
-                </Link>
-              )
-            })}
-          </nav>
-
-          {/* User Profile */}
-          <div className="border-t border-slate-800 p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="h-10 w-10 rounded-full bg-worknest-teal flex items-center justify-center text-white font-semibold shadow-lg">
-                {profile?.first_name?.[0] || profile?.email?.[0]?.toUpperCase() || 'U'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">
-                  {profile?.first_name && profile?.last_name 
-                    ? `${profile.first_name} ${profile.last_name}`
-                    : profile?.email
-                  }
-                </p>
-                <p className="text-xs text-gray-400 capitalize">{profile?.role?.replace('_', ' ')}</p>
-              </div>
-            </div>
-            <Button 
-              onClick={handleLogout}
-              variant="outline" 
-              size="sm" 
-              className="w-full border-slate-700 text-gray-300 hover:bg-slate-800 hover:text-white"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
+    <div className="min-h-screen bg-slate-50 flex overflow-hidden">
+      <AppSidebar />
+      <div className={cn(
+        "flex-1 flex flex-col transition-all duration-300 min-w-0 h-screen",
+        sidebarOpen ? "lg:ml-64" : "lg:ml-20"
+      )}>
+        <AppHeader />
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 scrollbar-hide">
+          <div className="max-w-7xl mx-auto animate-fade-in pb-12">
+            {children}
           </div>
-        </div>
-      </aside>
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-6 shadow-sm">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="lg:hidden text-gray-500 hover:text-gray-700"
-            aria-label="Open sidebar"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
-          
-          <div className="flex-1 lg:flex lg:items-center lg:justify-end">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600 hidden md:inline">
-                {new Date().toLocaleDateString('en-US', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}
-              </span>
-            </div>
-          </div>
-        </header>
-
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          {children}
         </main>
       </div>
     </div>
