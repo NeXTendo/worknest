@@ -87,6 +87,10 @@ module.exports = {
           "0%, 100%": { boxShadow: "0 0 0 0 rgba(20, 184, 166, 0.4)" },
           "50%": { boxShadow: "0 0 20px 10px rgba(20, 184, 166, 0.1)" },
         },
+        "text-shimmer": {
+          "0%": { backgroundPosition: "0 0" },
+          "100%": { backgroundPosition: "-200% 0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -94,6 +98,7 @@ module.exports = {
         "fade-in": "fade-in 0.5s ease-out",
         "slide-in-right": "slide-in-right 0.3s ease-out",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        "text-shimmer": "text-shimmer 2.5s ease-out infinite alternate",
       },
       fontFamily: {
         sans: ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],

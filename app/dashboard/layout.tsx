@@ -96,11 +96,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-slate-50">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div 
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -147,9 +147,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
                   className={`
-                    flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+                    flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
                     ${isActive 
-                      ? 'bg-teal-500 text-white' 
+                      ? 'bg-worknest-teal text-white shadow-lg shadow-worknest-teal/20' 
                       : 'text-gray-300 hover:bg-slate-800 hover:text-white'
                     }
                   `}
@@ -164,7 +164,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* User Profile */}
           <div className="border-t border-slate-800 p-4">
             <div className="flex items-center gap-3 mb-3">
-              <div className="h-10 w-10 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold">
+              <div className="h-10 w-10 rounded-full bg-worknest-teal flex items-center justify-center text-white font-semibold shadow-lg">
                 {profile?.first_name?.[0] || profile?.email?.[0]?.toUpperCase() || 'U'}
               </div>
               <div className="flex-1 min-w-0">
@@ -193,7 +193,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-6 shadow-sm">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden text-gray-500 hover:text-gray-700"

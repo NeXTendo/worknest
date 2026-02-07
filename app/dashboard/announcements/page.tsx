@@ -13,12 +13,14 @@ export default function AnnouncementsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Announcements</h1>
-          <p className="text-gray-600 mt-1">Company-wide communications</p>
+          <h1 className="text-3xl font-bold text-slate-900">Announcements</h1>
+          <p className="text-slate-600 mt-1">Company-wide communications</p>
         </div>
-        <Button><Plus className="mr-2 h-4 w-4" />New Announcement</Button>
+        <Button size="sm" className="w-full sm:w-auto">
+          <Plus className="mr-2 h-4 w-4" />New Announcement
+        </Button>
       </div>
 
       <div className="space-y-4">

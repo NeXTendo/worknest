@@ -23,8 +23,21 @@ interface DashboardStats {
   attendanceRate: number
 }
 
+interface ActivityItem {
+  title: string
+  description: string
+  time: string
+}
+
+interface DepartmentData {
+  name: string
+  employees: number
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [activities, setActivities] = useState<ActivityItem[]>([])
+  const [departments, setDepartments] = useState<DepartmentData[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
@@ -56,15 +69,96 @@ export default function DashboardPage() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pending')
 
+      // Calculate monthly payroll (current month)
+      const startOfMonth = new Date()
+      startOfMonth.setDate(1)
+      startOfMonth.setHours(0, 0, 0, 0)
+
+      const { data: payrollData } = await supabase
+        .from('payroll')
+        .select('net_pay')
+        .gte('pay_period_start', startOfMonth.toISOString())
+        .in('status', ['processed', 'paid'])
+
+      const monthlyPayroll = payrollData?.reduce((sum: number, p: { net_pay: number }) => sum + p.net_pay, 0) || 0
+
+      // Calculate employee growth (compare to last month)
+      const lastMonth = new Date()
+      lastMonth.setMonth(lastMonth.getMonth() - 1)
+      lastMonth.setDate(1)
+
+      const { count: lastMonthCount } = await supabase
+        .from('employees')
+        .select('*', { count: 'exact', head: true })
+        .eq('employment_status', 'active')
+        .lte('hire_date', lastMonth.toISOString())
+
+      const employeeGrowth = lastMonthCount && employeeCount
+        ? Math.round(((employeeCount - lastMonthCount) / lastMonthCount) * 100)
+        : 0
+
       // Calculate attendance rate
       const attendanceRate = employeeCount ? (presentCount || 0) / employeeCount * 100 : 0
+
+      // Fetch recent activity
+      const recentActivities: ActivityItem[] = []
+
+      // Get recent employees (last 3)
+      const { data: newEmployees } = await supabase
+        .from('employees')
+        .select('first_name, last_name, created_at, job_title_id')
+        .order('created_at', { ascending: false })
+        .limit(3)
+
+      newEmployees?.forEach((emp: { first_name: string; last_name: string; created_at: string }) => {
+        const timeAgo = getTimeAgo(emp.created_at)
+        recentActivities.push({
+          title: 'New employee added',
+          description: `${emp.first_name} ${emp.last_name} joined the team`,
+          time: timeAgo
+        })
+      })
+
+      // Get recent leave approvals (last 2)
+      const { data: recentLeave } = await supabase
+        .from('leave_requests')
+        .select('reviewed_at, leave_type, employees!inner(first_name, last_name)')
+        .eq('status', 'approved')
+        .not('reviewed_at', 'is', null)
+        .order('reviewed_at', { ascending: false })
+        .limit(2)
+
+      recentLeave?.forEach((leave: any) => {
+        const timeAgo = getTimeAgo(leave.reviewed_at)
+        recentActivities.push({
+          title: 'Leave approved',
+          description: `${leave.leave_type} leave for ${leave.employees.first_name} ${leave.employees.last_name}`,
+          time: timeAgo
+        })
+      })
+
+      // Sort by most recent and take top 5
+      setActivities(recentActivities.slice(0, 5))
+
+      // Fetch departments
+      const { data: deptData } = await supabase
+        .from('departments')
+        .select('name, employee_count')
+        .eq('is_active', true)
+        .order('employee_count', { ascending: false })
+        .limit(5)
+
+      setDepartments(deptData?.map((d: { name: string; employee_count: number }) => ({
+        name: d.name,
+        employees: d.employee_count
+      })) || [])
 
       setStats({
         totalEmployees: employeeCount || 0,
         presentToday: presentCount || 0,
-        monthlyPayroll: 450000, // This would come from payroll table
+        monthlyPayroll,
         pendingLeave: leaveCount || 0,
-        employeeGrowth: 0, // Calculated from historical data
+        employeeGrowth,
         attendanceRate: Math.round(attendanceRate),
       })
     } catch (error) {
@@ -72,6 +166,22 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Helper function to calculate time ago
+  function getTimeAgo(dateString: string): string {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`
+    if (diffDays === 1) return '1 day ago'
+    if (diffDays < 7) return `${diffDays} days ago`
+    return date.toLocaleDateString()
   }
 
   if (loading) {
@@ -86,14 +196,14 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-worknest-text">Dashboard</h1>
-        <p className="text-worknest-muted mt-1">Welcome to WorkNest - Overview of your organization</p>
+    <div className="space-y-8">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">Dashboard</h1>
+        <p className="text-slate-600">Welcome to WorkNest - Overview of your organization</p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Employees"
           value={stats?.totalEmployees.toString() || '0'}
@@ -132,44 +242,47 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts would go here */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="border-slate-200 shadow-sm">
           <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
+            <CardTitle className="text-slate-900">Recent Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <ActivityItem 
-                title="New employee added"
-                description="John Doe joined as Software Engineer"
-                time="2 hours ago"
-              />
-              <ActivityItem 
-                title="Leave approved"
-                description="Annual leave for Jane Smith approved"
-                time="5 hours ago"
-              />
-              <ActivityItem 
-                title="Payroll processed"
-                description="January payroll completed successfully"
-                time="1 day ago"
-              />
-            </div>
+            {activities.length > 0 ? (
+              <div className="space-y-4">
+                {activities.map((activity, index) => (
+                  <ActivityItem 
+                    key={index}
+                    title={activity.title}
+                    description={activity.description}
+                    time={activity.time}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-sm text-center py-4">No recent activity</p>
+            )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-slate-200 shadow-sm">
           <CardHeader>
-            <CardTitle>Department Overview</CardTitle>
+            <CardTitle className="text-slate-900">Department Overview</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <DepartmentItem name="Engineering" employees={45} />
-              <DepartmentItem name="Sales" employees={28} />
-              <DepartmentItem name="Marketing" employees={15} />
-              <DepartmentItem name="HR" employees={8} />
-              <DepartmentItem name="Finance" employees={12} />
-            </div>
+            {departments.length > 0 ? (
+              <div className="space-y-4">
+                {departments.map((dept, index) => (
+                  <DepartmentItem 
+                    key={index}
+                    name={dept.name} 
+                    employees={dept.employees} 
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-sm text-center py-4">No departments found</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -188,30 +301,30 @@ interface StatCardProps {
 
 function StatCard({ title, value, icon, trend, trendUp, subtitle }: StatCardProps) {
   return (
-    <Card>
+    <Card className="border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5">
       <CardContent className="pt-6">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <div className="h-10 w-10 rounded-lg bg-worknest-teal/10 flex items-center justify-center text-worknest-teal">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-slate-600 mb-1">{title}</p>
+            <p className="text-3xl font-bold text-slate-900 tracking-tight">{value}</p>
+          </div>
+          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-worknest-teal to-teal-600 flex items-center justify-center text-white shadow-lg shadow-worknest-teal/20">
             {icon}
           </div>
         </div>
-        <div>
-          <p className="text-3xl font-bold text-gray-900">{value}</p>
-          {trend && (
-            <div className="flex items-center gap-1 mt-1">
-              {trendUp ? (
-                <TrendingUp className="h-4 w-4 text-worknest-emerald" />
-              ) : (
-                <TrendingDown className="h-4 w-4 text-worknest-amber" />
-              )}
-              <span className={`text-sm font-medium ${trendUp ? 'text-worknest-emerald' : 'text-worknest-amber'}`}>
-                {trend}
-              </span>
-              {subtitle && <span className="text-sm text-gray-500 ml-1">{subtitle}</span>}
-            </div>
-          )}
-        </div>
+        {trend && (
+          <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100">
+            {trendUp ? (
+              <TrendingUp className="h-4 w-4 text-emerald-600" />
+            ) : (
+              <TrendingDown className="h-4 w-4 text-amber-600" />
+            )}
+            <span className={`text-sm font-semibold ${trendUp ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {trend}
+            </span>
+            {subtitle && <span className="text-sm text-slate-500">{subtitle}</span>}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -219,12 +332,12 @@ function StatCard({ title, value, icon, trend, trendUp, subtitle }: StatCardProp
 
 function ActivityItem({ title, description, time }: { title: string; description: string; time: string }) {
   return (
-    <div className="flex items-start gap-3">
-      <div className="h-2 w-2 rounded-full bg-worknest-teal mt-2" />
-      <div className="flex-1">
-        <p className="font-medium text-sm">{title}</p>
-        <p className="text-sm text-gray-500">{description}</p>
-        <p className="text-xs text-gray-400 mt-1">{time}</p>
+    <div className="flex items-start gap-3 group">
+      <div className="h-2 w-2 rounded-full bg-worknest-teal mt-2 group-hover:scale-125 transition-transform" />
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-sm text-slate-900">{title}</p>
+        <p className="text-sm text-slate-600 truncate">{description}</p>
+        <p className="text-xs text-slate-400 mt-1">{time}</p>
       </div>
     </div>
   )
@@ -232,9 +345,9 @@ function ActivityItem({ title, description, time }: { title: string; description
 
 function DepartmentItem({ name, employees }: { name: string; employees: number }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm font-medium">{name}</span>
-      <span className="text-sm text-gray-500">{employees} employees</span>
+    <div className="flex items-center justify-between py-2 hover:bg-slate-50 -mx-2 px-2 rounded-lg transition-colors">
+      <span className="text-sm font-semibold text-slate-900">{name}</span>
+      <span className="text-sm text-slate-600 font-medium">{employees} employees</span>
     </div>
   )
 }

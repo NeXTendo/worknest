@@ -8,7 +8,7 @@ import { Database } from '@/lib/database.types'
 
 const CONFIG = {
   // Routes that don't require authentication
-  PUBLIC_ROUTES: ['/auth/login', '/auth/callback'],
+  PUBLIC_ROUTES: ['/auth/login', '/auth/callback', '/auth/forgot-password'],
   
   // Routes that should be accessible even when password reset is required
   PASSWORD_RESET_ALLOWED_ROUTES: ['/auth/reset-password', '/auth/logout'],
@@ -46,6 +46,7 @@ const logger = {
  * Check if route is public (doesn't require authentication)
  */
 function isPublicRoute(pathname: string): boolean {
+  if (pathname === '/') return true
   return CONFIG.PUBLIC_ROUTES.some(route => pathname.startsWith(route))
 }
 
@@ -197,6 +198,11 @@ export async function middleware(request: NextRequest) {
 
   if (isPublicRoute(pathname)) {
     if (user) {
+      // Allow authenticated users to view the landing page
+      if (pathname === '/') {
+        return response
+      }
+
       // User is already authenticated, redirect to dashboard
       logger.info('Authenticated user accessing public route, redirecting to dashboard')
       return createRedirect(request, CONFIG.DEFAULT_DASHBOARD, 'Already authenticated')
