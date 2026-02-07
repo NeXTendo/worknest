@@ -1,6 +1,4 @@
-'use client'
-
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,13 +10,51 @@ import { useToast } from '@/hooks/useToast'
 import { insertRecord } from '@/lib/supabase/rpc-helpers'
 
 interface EmployeeFormProps {
+  employeeId?: string | null
   onSuccess?: () => void
   onCancel?: () => void
 }
 
-export function EmployeeForm({ onSuccess, onCancel }: EmployeeFormProps) {
+interface Department {
+  id: string
+  name: string
+}
+
+interface JobTitle {
+  id: string
+  title: string
+}
+
+interface EmployeeFormData {
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  date_of_birth: string
+  gender: string
+  national_id: string
+  employee_number: string
+  employment_type: string
+  employment_status: string
+  hire_date: string
+  department_id: string
+  job_title_id: string
+  base_salary: string
+  address_line_1: string
+  city: string
+  country: string
+  emergency_contact_name: string
+  emergency_contact_phone: string
+  emergency_contact_relationship: string
+  bank_name: string
+  bank_account_number: string
+}
+
+export function EmployeeForm({ employeeId, onSuccess, onCancel }: EmployeeFormProps) {
   const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [jobTitles, setJobTitles] = useState<JobTitle[]>([])
+  const [formData, setFormData] = useState<EmployeeFormData>({
     // Personal
     first_name: '',
     last_name: '',
@@ -32,7 +68,7 @@ export function EmployeeForm({ onSuccess, onCancel }: EmployeeFormProps) {
     employee_number: '',
     employment_type: 'full_time',
     employment_status: 'active',
-    hire_date: '',
+    hire_date: new Date().toISOString().split('T')[0],
     department_id: '',
     job_title_id: '',
     base_salary: '',
@@ -55,6 +91,77 @@ export function EmployeeForm({ onSuccess, onCancel }: EmployeeFormProps) {
   const supabase = createClient()
   const { toast } = useToast()
 
+  useEffect(() => {
+    fetchMetadata()
+    if (employeeId) {
+      fetchEmployee()
+    }
+  }, [employeeId])
+
+  async function fetchMetadata() {
+    try {
+      const [deptRes, jobsRes] = await Promise.all([
+        supabase.from('departments').select('id, name').eq('is_active', true).order('name'),
+        supabase.from('job_titles').select('id, title').eq('is_active', true).order('title')
+      ])
+
+      if (deptRes.data) setDepartments(deptRes.data)
+      if (jobsRes.data) setJobTitles(jobsRes.data)
+    } catch (error) {
+      console.error('Error fetching metadata:', error)
+    }
+  }
+
+  async function fetchEmployee() {
+    if (!employeeId) return
+
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('id', employeeId)
+        .single()
+
+      if (error) throw error
+      if (data) {
+        const emp = data as any
+        setFormData({
+          first_name: emp.first_name || '',
+          last_name: emp.last_name || '',
+          email: emp.email || '',
+          phone: emp.phone || '',
+          date_of_birth: emp.date_of_birth || '',
+          gender: emp.gender || '',
+          national_id: emp.national_id || '',
+          employee_number: emp.employee_number || '',
+          employment_type: emp.employment_type || 'full_time',
+          employment_status: emp.employment_status || 'active',
+          hire_date: emp.hire_date || '',
+          department_id: emp.department_id || '',
+          job_title_id: emp.job_title_id || '',
+          base_salary: emp.base_salary?.toString() || '',
+          address_line_1: emp.address_line_1 || '',
+          city: emp.city || 'Lusaka',
+          country: emp.country || 'Zambia',
+          emergency_contact_name: emp.emergency_contact_name || '',
+          emergency_contact_phone: emp.emergency_contact_phone || '',
+          emergency_contact_relationship: emp.emergency_contact_relationship || '',
+          bank_name: emp.bank_name || '',
+          bank_account_number: emp.bank_account_number || '',
+        })
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch employee details',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
@@ -64,24 +171,39 @@ export function EmployeeForm({ onSuccess, onCancel }: EmployeeFormProps) {
     setLoading(true)
 
     try {
-      const { data, error } = await insertRecord(
-        supabase,
-        'employees',
-        formData as any // Cast to any to bypass strict type checking against EmployeeInsert for now if needed, or rely on loose match
-      )
+      const payload: any = {
+        ...formData,
+        base_salary: formData.base_salary ? parseFloat(formData.base_salary) : null
+      }
+
+      let error
+      if (employeeId) {
+        const { error: updateError } = await (supabase
+          .from('employees') as any)
+          .update(payload)
+          .eq('id', employeeId)
+        error = updateError
+      } else {
+        const { error: insertError } = await (insertRecord as any)(
+          supabase,
+          'employees',
+          payload
+        )
+        error = insertError
+      }
 
       if (error) throw error
 
       toast({
         title: 'Success',
-        description: 'Employee created successfully',
+        description: `Employee ${employeeId ? 'updated' : 'created'} successfully`,
       })
 
       if (onSuccess) onSuccess()
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create employee',
+        description: error.message || `Failed to ${employeeId ? 'update' : 'create'} employee`,
         variant: 'destructive',
       })
     } finally {
@@ -208,6 +330,32 @@ export function EmployeeForm({ onSuccess, onCancel }: EmployeeFormProps) {
                 placeholder="0.00"
               />
             </div>
+            <div>
+              <Label htmlFor="department_id">Department</Label>
+              <Select value={formData.department_id} onValueChange={(v) => handleChange('department_id', v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="job_title_id">Job Title</Label>
+              <Select value={formData.job_title_id} onValueChange={(v) => handleChange('job_title_id', v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select job title" />
+                </SelectTrigger>
+                <SelectContent>
+                  {jobTitles.map((job) => (
+                    <SelectItem key={job.id} value={job.id}>{job.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </TabsContent>
 
@@ -269,7 +417,7 @@ export function EmployeeForm({ onSuccess, onCancel }: EmployeeFormProps) {
           </Button>
         )}
         <Button type="submit" disabled={loading}>
-          {loading ? 'Creating...' : 'Create Employee'}
+          {loading ? (employeeId ? 'Updating...' : 'Creating...') : (employeeId ? 'Update Employee' : 'Create Employee')}
         </Button>
       </div>
     </form>

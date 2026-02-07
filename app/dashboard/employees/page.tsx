@@ -5,39 +5,29 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/useToast'
 import { 
   UserPlus, 
   Search, 
-  Download,
-  MoreVertical
+  Download
 } from 'lucide-react'
-import { formatDate, getInitials } from '@/lib/utils'
-
-interface Employee {
-  id: string
-  employee_number: string
-  first_name: string
-  last_name: string
-  email: string
-  avatar_url: string | null
-  employment_status: string
-  employment_type: string
-  hire_date: string
-  departments: { name: string } | null
-  job_titles: { title: string } | null
-}
+import { EmployeeTable } from '@/components/employees/employee-table'
+import { EmployeeFilters } from '@/components/employees/employee-filters'
+import { EmployeeDrawer } from '@/components/employees/employee-drawer'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([])
+  const [employees, setEmployees] = useState<any[]>([])
+  const [filteredEmployees, setFilteredEmployees] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
   
+  // Drawer states
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
+
   const supabase = createClient()
   const { toast } = useToast()
 
@@ -47,7 +37,7 @@ export default function EmployeesPage() {
 
   useEffect(() => {
     filterEmployees()
-  }, [searchQuery, statusFilter, employees])
+  }, [searchQuery, statusFilter, typeFilter, employees])
 
   async function fetchEmployees() {
     try {
@@ -92,25 +82,99 @@ export default function EmployeesPage() {
       filtered = filtered.filter(emp => emp.employment_status === statusFilter)
     }
 
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(emp => emp.employment_type === typeFilter)
+    }
+
     setFilteredEmployees(filtered)
   }
 
-  function getStatusBadge(status: string) {
-    const colors: Record<string, string> = {
-      active: 'success',
-      on_leave: 'warning',
-      suspended: 'outline',
-      terminated: 'destructive',
-      pending: 'secondary',
+  const handleAddEmployee = () => {
+    setSelectedEmployeeId(null)
+    setIsDrawerOpen(true)
+  }
+
+  const handleViewEmployee = (id: string) => {
+    setSelectedEmployeeId(id)
+    setIsDrawerOpen(true)
+  }
+
+  const handleEditEmployee = (employee: any) => {
+    setSelectedEmployeeId(employee.id)
+    setIsDrawerOpen(true)
+  }
+
+  const handleDeleteEmployee = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this employee?')) return
+
+    try {
+      const { error } = await supabase
+        .from('employees')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      toast({
+        title: 'Success',
+        description: 'Employee deleted successfully',
+      })
+      fetchEmployees()
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete employee',
+        variant: 'destructive',
+      })
     }
-    return <Badge variant={colors[status] as any}>{status.replace('_', ' ').toUpperCase()}</Badge>
+  }
+
+  const handleExport = () => {
+    const headers = ['Employee ID', 'First Name', 'Last Name', 'Email', 'Status', 'Type', 'Hire Date']
+    const csvContent = [
+      headers.join(','),
+      ...filteredEmployees.map(emp => [
+        emp.employee_number,
+        emp.first_name,
+        emp.last_name,
+        emp.email,
+        emp.employment_status,
+        emp.employment_type,
+        emp.hire_date
+      ].join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `employees_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-12 w-64" />
-        {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-12 w-64" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <Skeleton className="h-10 w-full" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-8 w-48" />
+          </CardHeader>
+          <CardContent>
+            {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-16 w-full mb-4 last:mb-0" />)}
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -123,10 +187,10 @@ export default function EmployeesPage() {
           <p className="text-slate-600 mt-1">Manage your workforce ({employees.length} total)</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-          <Button variant="outline" size="sm" className="w-full sm:w-auto">
+          <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />Export
           </Button>
-          <Button size="sm" className="w-full sm:w-auto">
+          <Button size="sm" className="w-full sm:w-auto" onClick={handleAddEmployee}>
             <UserPlus className="mr-2 h-4 w-4" />Add Employee
           </Button>
         </div>
@@ -134,7 +198,7 @@ export default function EmployeesPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="flex gap-4">
+          <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
@@ -144,82 +208,31 @@ export default function EmployeesPage() {
                 className="pl-9"
               />
             </div>
-            <label htmlFor="status-filter" className="sr-only">
-              Filter by employment status
-            </label>
-            <select
-              id="status-filter"
-              aria-label="Filter by employment status"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border rounded-md"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="on_leave">On Leave</option>
-              <option value="suspended">Suspended</option>
-              <option value="terminated">Terminated</option>
-            </select>
+            <EmployeeFilters 
+              employmentType={typeFilter}
+              employmentStatus={statusFilter}
+              onTypeChange={setTypeFilter}
+              onStatusChange={setStatusFilter}
+            />
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{filteredEmployees.length} Employees</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {filteredEmployees.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No employees found</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4">Employee</th>
-                    <th className="text-left py-3 px-4">ID</th>
-                    <th className="text-left py-3 px-4">Job Title</th>
-                    <th className="text-left py-3 px-4">Department</th>
-                    <th className="text-left py-3 px-4">Status</th>
-                    <th className="text-left py-3 px-4">Hire Date</th>
-                    <th className="text-right py-3 px-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredEmployees.map((emp) => (
-                    <tr key={emp.id} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar>
-                            <AvatarImage src={emp.avatar_url || undefined} />
-                            <AvatarFallback>{getInitials(emp.first_name, emp.last_name)}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium">{emp.first_name} {emp.last_name}</p>
-                            <p className="text-sm text-gray-500">{emp.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-sm">{emp.employee_number}</td>
-                      <td className="py-3 px-4 text-sm">{emp.job_titles?.title || 'N/A'}</td>
-                      <td className="py-3 px-4 text-sm">{emp.departments?.name || 'N/A'}</td>
-                      <td className="py-3 px-4">{getStatusBadge(emp.employment_status)}</td>
-                      <td className="py-3 px-4 text-sm">{formatDate(emp.hire_date)}</td>
-                      <td className="py-3 px-4 text-right">
-                        <button className="p-2 hover:bg-gray-100 rounded" title="More actions">
-                          <MoreVertical className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <EmployeeTable 
+        employees={filteredEmployees}
+        onEdit={handleEditEmployee}
+        onDelete={handleDeleteEmployee}
+        onView={handleViewEmployee}
+      />
+
+      <EmployeeDrawer 
+        employeeId={selectedEmployeeId}
+        isOpen={isDrawerOpen}
+        onClose={() => {
+          setIsDrawerOpen(false)
+          fetchEmployees()
+        }}
+      />
     </div>
   )
 }
